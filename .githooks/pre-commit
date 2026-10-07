@@ -1,0 +1,27 @@
+#!/bin/sh
+
+# Regenerate the taxonomy from the code. When it changes, stop the
+# commit so the new taxonomy version can be reviewed and staged with it.
+
+PYTHON=".venv/Scripts/python.exe"
+[ -x "$PYTHON" ] || PYTHON=".venv/bin/python"
+
+if [ ! -x "$PYTHON" ]; then
+    echo "pre-commit: no .venv found; skipping the taxonomy check."
+    exit 0
+fi
+
+if ! "$PYTHON" scripts/build_taxonomy.py; then
+    echo ""
+    echo "ERROR: scripts/build_taxonomy.py failed."
+    exit 1
+fi
+
+TAXONOMY="src/plain_text_memory_mcp/taxonomy.json"
+
+if ! git diff --quiet -- "$TAXONOMY"; then
+    echo ""
+    echo "$TAXONOMY changed. Review the new version and changelog,"
+    echo "then stage it: git add $TAXONOMY"
+    exit 1
+fi

@@ -1,0 +1,73 @@
+#:schema https://json.schemastore.org/pyproject.json
+
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "plain-text-memory-mcp"
+version = "0.3.0"
+description = "Knowledge-graph memory MCP server that tags entries with date and agent"
+readme = "README.md"
+requires-python = ">=3.12"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Plain Text Office LLC" }]
+keywords = [
+    "mcp",
+    "model-context-protocol",
+    "memory",
+    "knowledge-graph",
+    "claude-code",
+    "codex",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development",
+]
+dependencies = ["mcp>=2.2,<3"]
+
+[project.urls]
+Homepage = "https://github.com/PlainTxtOffice/plain-text-memory-mcp"
+Issues = "https://github.com/PlainTxtOffice/plain-text-memory-mcp/issues"
+
+[project.scripts]
+plain-text-memory-mcp = "plain_text_memory_mcp.server:main"
+
+[dependency-groups]
+dev = ["pytest>=8"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+plain_text_memory_mcp = ["taxonomy.json", "prompts/*.md"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["scripts"]
+
+
+[tool.mypy]
+exclude = ['(^|[\\/])tests([\\/]|$)']
+ignore_missing_imports = true
+[tool.ruff]
+line-length = 80
+
+[tool.rumdl]
+line-length = 80
+respect-gitignore = true
+exclude = [".venv", "build", "dist"]
+
+[tool.rumdl.MD029]
+style = "one"
+
+[tool.rumdl.MD013]
+code-blocks = false
+tables = false
