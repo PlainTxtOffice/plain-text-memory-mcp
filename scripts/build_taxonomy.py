@@ -13,7 +13,7 @@ from pathlib import Path
 import taxonomy
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-# Ships inside the package; the server's export_taxonomy tool reads it.
+# Ships inside the package; the server's memory://taxonomy resource reads it.
 TAXONOMY_PATH = REPO_ROOT / "src" / "plain_text_memory_mcp" / "taxonomy.json"
 
 
@@ -23,7 +23,7 @@ def main() -> int:
     if TAXONOMY_PATH.exists():
         document = json.loads(TAXONOMY_PATH.read_text(encoding="utf-8"))
     content = taxonomy.build_content()
-    today = date.today().isoformat()  # noqa: DTZ011
+    today = date.today().isoformat()
     updated = taxonomy.update_document(document, content, today)
     if updated is None:
         # update_document returns None only for an existing document.

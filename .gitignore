@@ -1,6 +1,32 @@
-.venv/
+# Python-generated files
+*.py[oc]
 __pycache__/
 *.egg-info/
+build/
+dist/
+wheels/
+
+# virtual environments
+.venv**
+
+# tool caches
 .pytest_cache/
 .ruff_cache/
-.agents/memory.local.taxonomy.jsonc
+.mypy_cache/
+.rumdl_cache/
+tests/.pytest-temp/
+
+# this server's local state; see storage.py
+.agents/ptm/
+
+# client session transcripts; see data/feedback_from_clients/AGENTS.md
+data/feedback_from_clients/**
+!data/feedback_from_clients/AGENTS.md
+
+# files
+*.jpg
+*.jpeg
+logs/
+.env
+.DS_Store
+installing_nuitka.md

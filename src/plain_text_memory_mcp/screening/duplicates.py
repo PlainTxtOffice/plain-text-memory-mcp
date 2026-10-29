@@ -1,8 +1,8 @@
-"""Find observations that reword one already saved.
+"""Find notes that reword one already saved.
 
 - Measures resemblance as Broder does ("On the resemblance and containment
   of documents", 1997): the Jaccard overlap of two texts' shingle sets.
-  Observations are one sentence, so the shingles are single words and word
+  Notes are one sentence, so the shingles are single words and word
   pairs together; pairs keep word order from counting for nothing.
 """
 
@@ -20,7 +20,7 @@ THRESHOLD = 0.6
 
 @dataclass(frozen=True)
 class NearDuplicate:
-    """Hold the saved observation most like a new text."""
+    """Hold the saved note most like a new text."""
 
     entity_name: str
     text: str
@@ -43,7 +43,7 @@ def calc_resemblance(first: str, second: str) -> float:
 def look_near_duplicate(
     memory: Graph, entity_name: str, text: str
 ) -> NearDuplicate | None:
-    """Return the current observation most like `text`, if close enough.
+    """Return the current note most like `text`, if close enough.
 
     - Searches every entity; the exact same text on the same entity is not
       a near-duplicate of itself.
@@ -51,14 +51,14 @@ def look_near_duplicate(
     """
     best: NearDuplicate | None = None
     for entity in memory.entities:
-        for observation in entity.observations:
-            if not graph.is_current(observation):
+        for note in entity.notes:
+            if not graph.is_current(note):
                 continue
-            if entity.name == entity_name and observation.text == text:
+            if entity.name == entity_name and note.text == text:
                 continue
-            score = calc_resemblance(text, observation.text)
+            score = calc_resemblance(text, note.text)
             if score >= THRESHOLD and (
                 best is None or score > best.resemblance
             ):
-                best = NearDuplicate(entity.name, observation.text, score)
+                best = NearDuplicate(entity.name, note.text, score)
     return best

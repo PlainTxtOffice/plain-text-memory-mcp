@@ -1,12 +1,15 @@
-"""Tests for near-duplicate, instruction, and secret checks."""
+"""Tests for near-duplicate, instruction, secret, and reason checks."""
 
 import pytest
 
-from plain_text_memory_mcp import graph
-from plain_text_memory_mcp.graph import Graph, Tag
-from plain_text_memory_mcp.screening import duplicates, hazards
+from plain_text_memory_mcp.graph import Entity, Graph, Note, Tag
+from plain_text_memory_mcp.screening import duplicates, hazards, reasons
 
 TAG_A = Tag("2026-09-29T10:00:00-04:00", "claude-code")
+
+
+def _entity(name: str, *notes: Note) -> Entity:
+    return Entity(name, "x", list(notes), TAG_A)
 
 
 def test_resemblance_is_high_for_rewording_and_low_for_new_facts() -> None:
@@ -26,8 +29,8 @@ def test_resemblance_is_high_for_rewording_and_low_for_new_facts() -> None:
 def test_look_near_duplicate_searches_every_entity() -> None:
     memory = Graph(
         [
-            graph.build_entity("app", "x", ["Stores rows in SQLite"], TAG_A),
-            graph.build_entity("cli", "x", ["Stores rows in SQLite."], TAG_A),
+            _entity("app", Note("Stores rows in SQLite", TAG_A)),
+            _entity("cli", Note("Stores rows in SQLite.", TAG_A)),
         ]
     )
     twin = duplicates.look_near_duplicate(
@@ -38,12 +41,8 @@ def test_look_near_duplicate_searches_every_entity() -> None:
 
 
 def test_look_near_duplicate_skips_superseded_facts() -> None:
-    memory = Graph(
-        [graph.build_entity("app", "x", ["Stores rows in SQLite"], TAG_A)]
-    )
-    graph.supersede_observation(
-        memory, "app", "Stores rows in SQLite", None, TAG_A
-    )
+    retired = Note("Stores rows in SQLite", TAG_A, superseded=TAG_A)
+    memory = Graph([_entity("app", retired)])
     assert (
         duplicates.look_near_duplicate(memory, "cli", "Stores rows in SQLite")
         is None
@@ -87,6 +86,25 @@ def test_look_instruction_passes_ordinary_conventions(text: str) -> None:
 )
 def test_look_secret_names_the_kind_only(text: str, kind: str) -> None:
     assert hazards.look_secret(text) == kind
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Uses SQLite because the app runs offline.",
+        "Uses SQLite over Postgres, so no server is needed.",
+        "Pins numpy below 2 to avoid a pandas break.",
+    ],
+)
+def test_look_reason_finds_a_cause_or_purpose(text: str) -> None:
+    assert reasons.look_reason(text)
+
+
+@pytest.mark.parametrize(
+    "text", ["Uses SQLite.", "The CLI sorts tasks by due date."]
+)
+def test_look_reason_passes_bare_facts(text: str) -> None:
+    assert reasons.look_reason(text) is None
 
 
 def test_look_secret_passes_talk_about_secrets() -> None:

@@ -1,6 +1,6 @@
 """End-to-end test: launch the server as a subprocess over stdio."""
 
-import json
+import subprocess
 import sys
 from pathlib import Path
 
@@ -9,89 +9,39 @@ from mcp import Client
 from mcp.client.stdio import StdioServerParameters
 from mcp.types import Implementation
 
-TOOL_NAMES = {
-    "create_entities",
-    "create_relations",
-    "add_observations",
-    "delete_entities",
-    "delete_observations",
-    "delete_relations",
-    "read_graph",
-    "search_nodes",
-    "open_nodes",
-    "initialize_memory",
-    "export_taxonomy",
-    "rename_entity",
-    "merge_entities",
-    "edit_observation",
-    "supersede_observation",
-}
+TOOL_NAMES = {"search_nodes", "open_nodes", "recall", "stamp_notes"}
 
 
-def test_stdio_server_writes_tagged_file_at_repo_root(tmp_path: Path) -> None:
-    (tmp_path / ".git").mkdir()
+def test_stdio_server_stamps_files_from_the_repo_root(tmp_path: Path) -> None:
+    # A real repo, so git never falls through to an enclosing repo's
+    # ignore rules when the temp folder sits inside one.
+    subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
     workdir = tmp_path / "src"
     workdir.mkdir()
+    memory_file = workdir / "MEMORY.ptm.md"
+    memory_file.write_bytes(b"- The app stores notes in SQLite.\n")
     params = StdioServerParameters(
         command=sys.executable,
         args=["-m", "plain_text_memory_mcp.server"],
         cwd=workdir,
     )
     info = Implementation(name="codex-mcp-client", version="0")
-    entity = {"name": "app", "entityType": "project", "observations": ["x"]}
 
-    async def scenario() -> set[str]:
+    async def scenario() -> tuple[set[str], list[str]]:
         async with Client(params, client_info=info) as client:
             tools = await client.list_tools()
             result = await client.call_tool(
-                "create_entities", {"entities": [entity]}
+                "stamp_notes", {"paths": ["src/MEMORY.ptm.md"]}
             )
             assert not result.is_error, result.content
-            return {tool.name for tool in tools.tools}
+            found = await client.call_tool("search_nodes", {"query": "sqlite"})
+            assert found.structured_content is not None
+            hits = found.structured_content["hits"]
+            paths = [hit["note"]["path"] for hit in hits]
+            return {tool.name for tool in tools.tools}, paths
 
-    assert anyio.run(scenario) == TOOL_NAMES
-    memory_path = tmp_path / ".agents" / "memory.local.jsonl"
-    header_line, line = memory_path.read_text(encoding="utf-8").splitlines()
-    assert json.loads(header_line)["repo_root"] == tmp_path.as_posix()
-    record = json.loads(line)
-    assert record["agent"] == "codex"
-    assert record["observations"][0]["agent"] == "codex"
-
-
-def _stdio_params(repo_root: Path) -> StdioServerParameters:
-    return StdioServerParameters(
-        command=sys.executable,
-        args=["-m", "plain_text_memory_mcp.server"],
-        cwd=repo_root,
-    )
-
-
-def test_stdio_server_blocks_memory_copied_from_another_repo(
-    tmp_path: Path,
-) -> None:
-    template = tmp_path / "python-vscode-template"
-    project = tmp_path / "new_project"
-    for repo_root in (template, project):
-        (repo_root / ".git").mkdir(parents=True)
-    info = Implementation(name="claude-code", version="0")
-    entity = {"name": "app", "entityType": "project", "observations": ["x"]}
-
-    async def write_template() -> None:
-        async with Client(_stdio_params(template), client_info=info) as client:
-            await client.call_tool("create_entities", {"entities": [entity]})
-
-    async def read_project() -> tuple[bool, str, bool]:
-        async with Client(_stdio_params(project), client_info=info) as client:
-            blocked = await client.call_tool("read_graph", {})
-            await client.call_tool("initialize_memory", {"mode": "fresh"})
-            after = await client.call_tool("read_graph", {})
-            return blocked.is_error, blocked.content[0].text, after.is_error
-
-    anyio.run(write_template)
-    relative = Path(".agents") / "memory.local.jsonl"
-    (project / ".agents").mkdir()
-    (project / relative).write_bytes((template / relative).read_bytes())
-    blocked, message, still_blocked = anyio.run(read_project)
-    assert blocked
-    assert "python-vscode-template" in message
-    assert not still_blocked
+    tool_names, paths = anyio.run(scenario)
+    assert tool_names == TOOL_NAMES
+    assert paths == ["src/MEMORY.ptm.md"]
+    assert " codex #" in memory_file.read_bytes().decode("utf-8")
+    assert (tmp_path / ".agents" / "ptm").is_dir()

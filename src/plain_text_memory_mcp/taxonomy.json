@@ -1,33 +1,34 @@
 {
-  "taxonomy_version": "2.8.1",
+  "taxonomy_version": "7.0.0",
   "package": {
     "name": "plain-text-memory-mcp",
-    "version": "0.3.0"
+    "version": "0.4.0"
   },
   "record_types": {
-    "header": {
-      "purpose": "First line of the memory file. Names the repo that owns it, so a copy in another repo is detected.",
-      "fields": {
-        "type": "\"header\"",
-        "repo_name": "string",
-        "repo_root": "string",
-        "added_at": "string|null",
-        "agent": "string|null"
-      }
-    },
     "entity": {
-      "purpose": "A named thing the agents remember, such as a repo, module, library, person, or decision, with its observations.",
+      "purpose": "A named thing the agents remember, such as a folder, module, library, or decision, with its notes. A heading in a MEMORY.ptm.md or AGENTS.md file starts one; a name used in several files is one entity.",
       "fields": {
         "type": "\"entity\"",
         "name": "string",
         "entityType": "string",
         "added_at": "string|null",
         "agent": "string|null",
-        "observations": "observation[]"
+        "notes": {
+          "type": "note[]",
+          "purpose": "One fact about an entity, inside its notes list: a bullet of a MEMORY.ptm.md file, or a bullet or paragraph of an AGENTS.md file. path is the file it came from. superseded_at and replaced_by appear once the bullet is struck through: superseded_at is its retirement stamp and replaced_by the live bullet it is nested under.",
+          "fields": {
+            "text": "string",
+            "added_at": "string|null",
+            "agent": "string|null",
+            "path": "string (optional)",
+            "superseded_at": "string|null (optional)",
+            "replaced_by": "string (optional)"
+          }
+        }
       }
     },
     "relation": {
-      "purpose": "A directed link between two entities, in active voice: reading_list uses sqlite.",
+      "purpose": "A directed link between two entities, read from a bullet that is one verb and one [[link]], in active voice: reading_list uses sqlite.",
       "fields": {
         "type": "\"relation\"",
         "from": "string",
@@ -37,36 +38,32 @@
         "agent": "string|null"
       }
     },
-    "observation": {
-      "purpose": "One fact about an entity, stored inside the entity's observations list. edited_at and edited_by appear once its text is edited; superseded_at, superseded_by, and replaced_by once it is retired; sources when it was derived from other observations.",
-      "fields": {
-        "text": "string",
-        "added_at": "string|null",
-        "agent": "string|null",
-        "sources": "source[] (optional)",
-        "superseded_at": "string|null (optional)",
-        "superseded_by": "string|null (optional)",
-        "replaced_by": "string (optional)",
-        "edited_at": "string|null (optional)",
-        "edited_by": "string|null (optional)"
-      }
-    },
-    "tombstone": {
-      "purpose": "Removes the entity or relation it names. Writes append changed records and tombstones; a later line for the same entity or relation replaces an earlier one, until compaction rewrites the file with one line per record.",
-      "fields": {
-        "type": "\"tombstone\"",
-        "entity": "string (optional)",
-        "from": "string (optional)",
-        "to": "string (optional)",
-        "relationType": "string (optional)"
-      }
-    },
     "access": {
-      "purpose": "One line of memory.local.access.jsonl, appended when an agent opens an entity; search ranks often-opened entities higher.",
+      "purpose": "One line of .agents/ptm/access.jsonl, appended when an agent opens an entity; search ranks often-opened entities higher.",
       "fields": {
         "type": "\"access\"",
         "at": "string",
         "entity": "string"
+      }
+    },
+    "recall": {
+      "purpose": "One line of .agents/ptm/recall.jsonl, a development log written only when MEMORY_RECALL_LOG=1: a recall step with its thought, queries, hits, and conclusion, or a search_nodes or open_nodes call.",
+      "fields": {
+        "type": "\"recall\"",
+        "kind": "string",
+        "at": "string",
+        "agent": "string",
+        "queries": "query[] (optional)",
+        "hits": "hit[] (optional)",
+        "session": "string (optional)",
+        "step": "integer (optional)",
+        "total_steps": "integer (optional)",
+        "revises_step": "null|integer (optional)",
+        "thought": "string (optional)",
+        "names": "name[] (optional)",
+        "seen": "integer (optional)",
+        "conclusion": "null|string (optional)",
+        "sources": "source[] (optional)"
       }
     }
   },
@@ -75,382 +72,9 @@
       "claude-code",
       "codex",
       "unknown"
-    ],
-    "initialize_memory.mode": [
-      "fresh",
-      "adopt"
-    ],
-    "initialize_memory.status": [
-      "unchanged",
-      "fresh",
-      "initialized",
-      "adopted"
     ]
   },
   "tools": {
-    "add_observations": {
-      "description": "Add observations to existing entities.",
-      "params": {
-        "observations": [
-          {
-            "entityName": "string",
-            "contents": [
-              "string"
-            ],
-            "sources": [
-              {
-                "entityName": "string",
-                "text": "string"
-              }
-            ]
-          }
-        ]
-      },
-      "returns": {
-        "results": [
-          {
-            "entityName": "string",
-            "addedObservations": [
-              {
-                "text": "string",
-                "added_at": "string|null",
-                "agent": "string|null",
-                "edited_at": "string|null",
-                "edited_by": "string|null",
-                "superseded_at": "string|null",
-                "superseded_by": "string|null",
-                "replaced_by": "string|null",
-                "sources": [
-                  {
-                    "entityName": "string",
-                    "text": "string"
-                  }
-                ]
-              }
-            ]
-          }
-        ],
-        "warnings": [
-          {
-            "kind": "near_duplicate|instruction_like|secret",
-            "entityName": "string",
-            "text": "string",
-            "message": "string"
-          }
-        ]
-      }
-    },
-    "create_entities": {
-      "description": "Create new entities, each with a type and observations.",
-      "params": {
-        "entities": [
-          {
-            "name": "string",
-            "entityType": "string",
-            "observations": [
-              "string"
-            ]
-          }
-        ]
-      },
-      "returns": {
-        "entities": [
-          {
-            "type": "\"entity\"",
-            "name": "string",
-            "entityType": "string",
-            "added_at": "string|null",
-            "agent": "string|null",
-            "observations": [
-              {
-                "text": "string",
-                "added_at": "string|null",
-                "agent": "string|null",
-                "edited_at": "string|null",
-                "edited_by": "string|null",
-                "superseded_at": "string|null",
-                "superseded_by": "string|null",
-                "replaced_by": "string|null",
-                "sources": [
-                  {
-                    "entityName": "string",
-                    "text": "string"
-                  }
-                ]
-              }
-            ]
-          }
-        ],
-        "skipped": [
-          "string"
-        ],
-        "warnings": [
-          {
-            "kind": "near_duplicate|instruction_like|secret",
-            "entityName": "string",
-            "text": "string",
-            "message": "string"
-          }
-        ]
-      }
-    },
-    "create_relations": {
-      "description": "Create directed, typed relations between existing entities.",
-      "params": {
-        "relations": [
-          {
-            "from": "string",
-            "to": "string",
-            "relationType": "string"
-          }
-        ]
-      },
-      "returns": {
-        "relations": [
-          {
-            "type": "\"relation\"",
-            "from": "string",
-            "to": "string",
-            "relationType": "string",
-            "added_at": "string|null",
-            "agent": "string|null"
-          }
-        ],
-        "skipped": [
-          {
-            "from": "string",
-            "to": "string",
-            "relationType": "string",
-            "missing": [
-              "string"
-            ]
-          }
-        ]
-      }
-    },
-    "delete_entities": {
-      "description": "Delete entities by name, with every relation that touches them.",
-      "params": {
-        "entityNames": [
-          "string"
-        ]
-      },
-      "returns": {
-        "message": "string",
-        "deletedEntities": [
-          {
-            "type": "\"entity\"",
-            "name": "string",
-            "entityType": "string",
-            "added_at": "string|null",
-            "agent": "string|null",
-            "observations": [
-              {
-                "text": "string",
-                "added_at": "string|null",
-                "agent": "string|null",
-                "edited_at": "string|null",
-                "edited_by": "string|null",
-                "superseded_at": "string|null",
-                "superseded_by": "string|null",
-                "replaced_by": "string|null",
-                "sources": [
-                  {
-                    "entityName": "string",
-                    "text": "string"
-                  }
-                ]
-              }
-            ]
-          }
-        ],
-        "deletedRelations": [
-          {
-            "type": "\"relation\"",
-            "from": "string",
-            "to": "string",
-            "relationType": "string",
-            "added_at": "string|null",
-            "agent": "string|null"
-          }
-        ]
-      }
-    },
-    "delete_observations": {
-      "description": "Delete observations from entities, matched by exact text.",
-      "params": {
-        "deletions": [
-          {
-            "entityName": "string",
-            "observations": [
-              "string"
-            ]
-          }
-        ]
-      },
-      "returns": {
-        "message": "string",
-        "deletedObservations": [
-          {
-            "entityName": "string",
-            "deletedObservations": [
-              {
-                "text": "string",
-                "added_at": "string|null",
-                "agent": "string|null",
-                "edited_at": "string|null",
-                "edited_by": "string|null",
-                "superseded_at": "string|null",
-                "superseded_by": "string|null",
-                "replaced_by": "string|null",
-                "sources": [
-                  {
-                    "entityName": "string",
-                    "text": "string"
-                  }
-                ]
-              }
-            ]
-          }
-        ]
-      }
-    },
-    "delete_relations": {
-      "description": "Delete relations matched by source, target, and relation type.",
-      "params": {
-        "relations": [
-          {
-            "from": "string",
-            "to": "string",
-            "relationType": "string"
-          }
-        ]
-      },
-      "returns": {
-        "message": "string",
-        "deletedRelations": [
-          {
-            "type": "\"relation\"",
-            "from": "string",
-            "to": "string",
-            "relationType": "string",
-            "added_at": "string|null",
-            "agent": "string|null"
-          }
-        ]
-      }
-    },
-    "edit_observation": {
-      "description": "Replace one observation's text in place.",
-      "params": {
-        "entityName": "string",
-        "oldText": "string",
-        "newText": "string"
-      },
-      "returns": {
-        "message": "string",
-        "entityName": "string",
-        "observation": {
-          "text": "string",
-          "added_at": "string|null",
-          "agent": "string|null",
-          "edited_at": "string|null",
-          "edited_by": "string|null",
-          "superseded_at": "string|null",
-          "superseded_by": "string|null",
-          "replaced_by": "string|null",
-          "sources": [
-            {
-              "entityName": "string",
-              "text": "string"
-            }
-          ]
-        },
-        "warnings": [
-          {
-            "kind": "near_duplicate|instruction_like|secret",
-            "entityName": "string",
-            "text": "string",
-            "message": "string"
-          }
-        ]
-      }
-    },
-    "export_taxonomy": {
-      "description": "Write this repo's memory taxonomy to a JSONC file the user can read.",
-      "params": {},
-      "returns": {
-        "path": "string",
-        "taxonomy_version": "string",
-        "counts": {
-          "entities": "integer",
-          "observations": "integer",
-          "relations": "integer"
-        }
-      }
-    },
-    "initialize_memory": {
-      "description": "Claim the memory file for this repo, or start a new one.",
-      "params": {
-        "mode": "fresh|adopt"
-      },
-      "returns": {
-        "status": "unchanged|fresh|initialized|adopted",
-        "header": {
-          "type": "\"header\"",
-          "repo_name": "string",
-          "repo_root": "string",
-          "added_at": "string|null",
-          "agent": "string|null"
-        },
-        "backup": "string|null"
-      }
-    },
-    "merge_entities": {
-      "description": "Fold one entity into another and delete the first.",
-      "params": {
-        "sourceName": "string",
-        "targetName": "string"
-      },
-      "returns": {
-        "message": "string",
-        "entity": {
-          "type": "\"entity\"",
-          "name": "string",
-          "entityType": "string",
-          "added_at": "string|null",
-          "agent": "string|null",
-          "observations": [
-            {
-              "text": "string",
-              "added_at": "string|null",
-              "agent": "string|null",
-              "edited_at": "string|null",
-              "edited_by": "string|null",
-              "superseded_at": "string|null",
-              "superseded_by": "string|null",
-              "replaced_by": "string|null",
-              "sources": [
-                {
-                  "entityName": "string",
-                  "text": "string"
-                }
-              ]
-            }
-          ]
-        },
-        "movedRelations": [
-          {
-            "type": "\"relation\"",
-            "from": "string",
-            "to": "string",
-            "relationType": "string",
-            "added_at": "string|null",
-            "agent": "string|null"
-          }
-        ]
-      }
-    },
     "open_nodes": {
       "description": "Open entities by exact name.",
       "params": {
@@ -467,22 +91,14 @@
             "entityType": "string",
             "added_at": "string|null",
             "agent": "string|null",
-            "observations": [
+            "notes": [
               {
                 "text": "string",
                 "added_at": "string|null",
                 "agent": "string|null",
-                "edited_at": "string|null",
-                "edited_by": "string|null",
                 "superseded_at": "string|null",
-                "superseded_by": "string|null",
                 "replaced_by": "string|null",
-                "sources": [
-                  {
-                    "entityName": "string",
-                    "text": "string"
-                  }
-                ]
+                "path": "string"
               }
             ]
           }
@@ -499,16 +115,50 @@
         ]
       }
     },
-    "read_graph": {
-      "description": "Read every entity and relation, or only those in a date range.",
+    "recall": {
+      "description": "Search memory in steps, recording why each search was made.",
       "params": {
-        "since": "string|null",
-        "before": "string|null",
-        "agent": "string|null",
-        "limit": "integer|null",
-        "include_superseded": "boolean"
+        "thought": "string",
+        "step": "integer",
+        "total_steps": "integer",
+        "next_step_needed": "boolean",
+        "queries": [
+          "string"
+        ],
+        "open": [
+          "string"
+        ],
+        "revises_step": "integer|null",
+        "conclusion": "string|null",
+        "sources": [
+          {
+            "entityName": "string",
+            "text": "string"
+          }
+        ],
+        "session": "string|null",
+        "path": "string|null"
       },
       "returns": {
+        "session": "string",
+        "step": "integer",
+        "total_steps": "integer",
+        "next_step_needed": "boolean",
+        "hits": [
+          {
+            "rank": "integer",
+            "score": "number",
+            "entityName": "string",
+            "note": {
+              "text": "string",
+              "added_at": "string|null",
+              "agent": "string|null",
+              "superseded_at": "string|null",
+              "replaced_by": "string|null",
+              "path": "string"
+            }
+          }
+        ],
         "entities": [
           {
             "type": "\"entity\"",
@@ -516,22 +166,14 @@
             "entityType": "string",
             "added_at": "string|null",
             "agent": "string|null",
-            "observations": [
+            "notes": [
               {
                 "text": "string",
                 "added_at": "string|null",
                 "agent": "string|null",
-                "edited_at": "string|null",
-                "edited_by": "string|null",
                 "superseded_at": "string|null",
-                "superseded_by": "string|null",
                 "replaced_by": "string|null",
-                "sources": [
-                  {
-                    "entityName": "string",
-                    "text": "string"
-                  }
-                ]
+                "path": "string"
               }
             ]
           }
@@ -545,46 +187,18 @@
             "added_at": "string|null",
             "agent": "string|null"
           }
+        ],
+        "unopened": [
+          "string"
+        ],
+        "seen": "integer",
+        "warnings": [
+          "string"
         ]
       }
     },
-    "rename_entity": {
-      "description": "Rename an entity and every relation that names it.",
-      "params": {
-        "entityName": "string",
-        "newName": "string"
-      },
-      "returns": {
-        "message": "string",
-        "entity": {
-          "type": "\"entity\"",
-          "name": "string",
-          "entityType": "string",
-          "added_at": "string|null",
-          "agent": "string|null",
-          "observations": [
-            {
-              "text": "string",
-              "added_at": "string|null",
-              "agent": "string|null",
-              "edited_at": "string|null",
-              "edited_by": "string|null",
-              "superseded_at": "string|null",
-              "superseded_by": "string|null",
-              "replaced_by": "string|null",
-              "sources": [
-                {
-                  "entityName": "string",
-                  "text": "string"
-                }
-              ]
-            }
-          ]
-        }
-      }
-    },
     "search_nodes": {
-      "description": "Search entities and observations, ranked by BM25 relevance.",
+      "description": "Search entities and notes, ranked by BM25 relevance.",
       "params": {
         "query": "string",
         "since": "string|null",
@@ -602,22 +216,14 @@
             "entityType": "string",
             "added_at": "string|null",
             "agent": "string|null",
-            "observations": [
+            "notes": [
               {
                 "text": "string",
                 "added_at": "string|null",
                 "agent": "string|null",
-                "edited_at": "string|null",
-                "edited_by": "string|null",
                 "superseded_at": "string|null",
-                "superseded_by": "string|null",
                 "replaced_by": "string|null",
-                "sources": [
-                  {
-                    "entityName": "string",
-                    "text": "string"
-                  }
-                ]
+                "path": "string"
               }
             ]
           }
@@ -637,58 +243,40 @@
             "rank": "integer",
             "score": "number",
             "entityName": "string",
-            "observation": {
+            "note": {
               "text": "string",
               "added_at": "string|null",
               "agent": "string|null",
-              "edited_at": "string|null",
-              "edited_by": "string|null",
               "superseded_at": "string|null",
-              "superseded_by": "string|null",
               "replaced_by": "string|null",
-              "sources": [
-                {
-                  "entityName": "string",
-                  "text": "string"
-                }
-              ]
+              "path": "string"
             }
           }
         ]
       }
     },
-    "supersede_observation": {
-      "description": "Retire a fact that stopped being true, keeping it as history.",
+    "stamp_notes": {
+      "description": "Stamp new and changed notes in memory files, then screen them.",
       "params": {
-        "entityName": "string",
-        "oldText": "string",
-        "newText": "string|null"
+        "paths": [
+          "string"
+        ]
       },
       "returns": {
-        "message": "string",
-        "entityName": "string",
-        "superseded": {
-          "text": "string",
-          "added_at": "string|null",
-          "agent": "string|null",
-          "edited_at": "string|null",
-          "edited_by": "string|null",
-          "superseded_at": "string|null",
-          "superseded_by": "string|null",
-          "replaced_by": "string|null",
-          "sources": [
-            {
-              "entityName": "string",
-              "text": "string"
-            }
-          ]
-        },
-        "replacement": "{'text': 'string', 'added_at': 'string|null', 'agent': 'string|null', 'edited_at': 'string|null', 'edited_by': 'string|null', 'superseded_at': 'string|null', 'superseded_by': 'string|null', 'replaced_by': 'string|null', 'sources': [{'entityName': 'string', 'text': 'string'}]}|null",
+        "files": [
+          {
+            "path": "string",
+            "stamped": "integer",
+            "retired": "integer",
+            "archived": "integer"
+          }
+        ],
         "warnings": [
           {
-            "kind": "near_duplicate|instruction_like|secret",
+            "kind": "near_duplicate|instruction_like|secret|broken_link|long_file|no_reason",
             "entityName": "string",
             "text": "string",
+            "path": "string",
             "message": "string"
           }
         ]
@@ -699,28 +287,182 @@
     "memory://taxonomy": {
       "name": "taxonomy",
       "title": "Memory taxonomy",
-      "description": "The server's versioned schema: record types and their fields, tools with their parameters and results, allowed enum values, resources, prompts, and the changelog. To write it to the repo with this repo's usage counts, see the export_taxonomy tool.",
+      "description": "The server's versioned schema: record types and their fields, tools with their parameters and results, allowed enum values, resources, prompts, and the changelog.",
       "mime_type": "application/json"
     }
   },
-  "prompts": {
-    "cleanup": {
-      "title": "Clean up memory",
-      "description": "Review the memory graph and propose deletions and merges; nothing is deleted until approved.",
-      "arguments": []
-    },
-    "export": {
-      "title": "Export memory taxonomy",
-      "description": "Write this repo's taxonomy and usage counts to .agents/ and report them.",
-      "arguments": []
-    },
-    "reflect": {
-      "title": "Reflect on memory",
-      "description": "Propose summary facts that consolidate related observations, each citing its sources; nothing is saved until approved.",
-      "arguments": []
-    }
-  },
+  "prompts": {},
   "changelog": [
+    {
+      "version": "7.0.0",
+      "date": "2026-10-26",
+      "changes": [
+        "changed: tools.stamp_notes.returns.warnings[].kind (near_duplicate|instruction_like|secret|broken_link|long_file -> near_duplicate|instruction_like|secret|broken_link|long_file|no_reason)"
+      ]
+    },
+    {
+      "version": "6.0.1",
+      "date": "2026-10-17",
+      "changes": [
+        "changed: record_types.access.purpose",
+        "changed: record_types.recall.purpose"
+      ]
+    },
+    {
+      "version": "6.0.0",
+      "date": "2026-10-17",
+      "changes": [
+        "changed: tools.stamp_notes.returns.warnings[].kind (near_duplicate|instruction_like|secret|broken_link -> near_duplicate|instruction_like|secret|broken_link|long_file)"
+      ]
+    },
+    {
+      "version": "5.0.1",
+      "date": "2026-10-09",
+      "changes": [
+        "changed: package.version"
+      ]
+    },
+    {
+      "version": "5.0.0",
+      "date": "2026-10-09",
+      "changes": [
+        "removed: record_types.entity.fields.notes.fields.edited_at",
+        "removed: record_types.entity.fields.notes.fields.edited_by",
+        "removed: record_types.entity.fields.notes.fields.sources",
+        "removed: record_types.entity.fields.notes.fields.superseded_by",
+        "removed: record_types.entity.tombstone",
+        "removed: record_types.header",
+        "removed: record_types.relation.tombstone",
+        "removed: tools.open_nodes.returns.entities[].notes[].edited_at",
+        "removed: tools.open_nodes.returns.entities[].notes[].edited_by",
+        "removed: tools.open_nodes.returns.entities[].notes[].sources[]",
+        "removed: tools.open_nodes.returns.entities[].notes[].superseded_by",
+        "removed: tools.recall.returns.entities[].notes[].edited_at",
+        "removed: tools.recall.returns.entities[].notes[].edited_by",
+        "removed: tools.recall.returns.entities[].notes[].sources[]",
+        "removed: tools.recall.returns.entities[].notes[].superseded_by",
+        "removed: tools.recall.returns.hits[].note.edited_at",
+        "removed: tools.recall.returns.hits[].note.edited_by",
+        "removed: tools.recall.returns.hits[].note.sources[]",
+        "removed: tools.recall.returns.hits[].note.superseded_by",
+        "removed: tools.search_nodes.returns.entities[].notes[].edited_at",
+        "removed: tools.search_nodes.returns.entities[].notes[].edited_by",
+        "removed: tools.search_nodes.returns.entities[].notes[].sources[]",
+        "removed: tools.search_nodes.returns.entities[].notes[].superseded_by",
+        "removed: tools.search_nodes.returns.hits[].note.edited_at",
+        "removed: tools.search_nodes.returns.hits[].note.edited_by",
+        "removed: tools.search_nodes.returns.hits[].note.sources[]",
+        "removed: tools.search_nodes.returns.hits[].note.superseded_by",
+        "changed: record_types.entity.fields.notes.purpose",
+        "changed: record_types.entity.purpose",
+        "changed: record_types.relation.purpose"
+      ]
+    },
+    {
+      "version": "4.0.0",
+      "date": "2026-10-09",
+      "changes": [
+        "removed: enums.initialize_memory",
+        "removed: prompts.cleanup",
+        "removed: prompts.export",
+        "removed: prompts.reflect",
+        "removed: tools.add_notes",
+        "removed: tools.create_entities",
+        "removed: tools.create_relations",
+        "removed: tools.delete_entities",
+        "removed: tools.delete_notes",
+        "removed: tools.delete_relations",
+        "removed: tools.edit_note",
+        "removed: tools.export_entry_spec",
+        "removed: tools.initialize_memory",
+        "removed: tools.merge_entities",
+        "removed: tools.read_graph",
+        "removed: tools.rename_entity",
+        "removed: tools.supersede_note",
+        "added: record_types.entity.fields.notes.fields.path",
+        "added: tools.open_nodes.returns.entities[].notes[].path",
+        "added: tools.recall.params.path",
+        "added: tools.recall.returns.entities[].notes[].path",
+        "added: tools.recall.returns.hits[].note.path",
+        "added: tools.search_nodes.returns.entities[].notes[].path",
+        "added: tools.search_nodes.returns.hits[].note.path",
+        "added: tools.stamp_notes",
+        "changed: resources.memory://taxonomy.description"
+      ]
+    },
+    {
+      "version": "3.0.1",
+      "date": "2026-10-08",
+      "changes": [
+        "changed: record_types.entity.tombstone.purpose",
+        "changed: record_types.relation.tombstone.purpose"
+      ]
+    },
+    {
+      "version": "3.0.0",
+      "date": "2026-10-08",
+      "changes": [
+        "removed: record_types.entity.fields.observations",
+        "removed: record_types.observation",
+        "removed: record_types.tombstone",
+        "removed: tools.add_observations",
+        "removed: tools.create_entities.params.entities[].observations[string]",
+        "removed: tools.create_entities.returns.entities[].observations[]",
+        "removed: tools.delete_entities.returns.deletedEntities[].observations[]",
+        "removed: tools.delete_observations",
+        "removed: tools.edit_observation",
+        "removed: tools.export_taxonomy",
+        "removed: tools.merge_entities.returns.entity.observations[]",
+        "removed: tools.open_nodes.returns.entities[].observations[]",
+        "removed: tools.read_graph.returns.entities[].observations[]",
+        "removed: tools.recall.returns.entities[].observations[]",
+        "removed: tools.recall.returns.hits[].observation",
+        "removed: tools.rename_entity.returns.entity.observations[]",
+        "removed: tools.search_nodes.returns.entities[].observations[]",
+        "removed: tools.search_nodes.returns.hits[].observation",
+        "removed: tools.supersede_observation",
+        "added: record_types.entity.fields.notes",
+        "added: record_types.entity.tombstone",
+        "added: record_types.relation.tombstone",
+        "added: tools.add_notes",
+        "added: tools.create_entities.params.entities[].notes[string]",
+        "added: tools.create_entities.returns.entities[].notes[]",
+        "added: tools.delete_entities.returns.deletedEntities[].notes[]",
+        "added: tools.delete_notes",
+        "added: tools.edit_note",
+        "added: tools.export_entry_spec",
+        "added: tools.merge_entities.returns.entity.notes[]",
+        "added: tools.open_nodes.returns.entities[].notes[]",
+        "added: tools.read_graph.returns.entities[].notes[]",
+        "added: tools.recall.returns.entities[].notes[]",
+        "added: tools.recall.returns.hits[].note",
+        "added: tools.rename_entity.returns.entity.notes[]",
+        "added: tools.search_nodes.returns.entities[].notes[]",
+        "added: tools.search_nodes.returns.hits[].note",
+        "added: tools.supersede_note",
+        "changed: prompts.export.description",
+        "changed: prompts.export.title",
+        "changed: prompts.reflect.description",
+        "changed: record_types.entity.purpose",
+        "changed: resources.memory://taxonomy.description",
+        "changed: tools.create_entities.description",
+        "changed: tools.search_nodes.description"
+      ]
+    },
+    {
+      "version": "2.10.0",
+      "date": "2026-10-07",
+      "changes": [
+        "added: tools.recall"
+      ]
+    },
+    {
+      "version": "2.9.0",
+      "date": "2026-10-07",
+      "changes": [
+        "added: record_types.recall"
+      ]
+    },
     {
       "version": "2.8.1",
       "date": "2026-10-05",

@@ -1,8 +1,8 @@
-"""Map graph models to and from JSONL records.
+"""Map graph models to the JSON records that tools return and logs hold.
 
 - Key names match the original server where they overlap: `entityType`,
   `relationType`, `from`, and `to`.
-- Records written before tagging existed load with `UNTAGGED`.
+- The access log is the only file of records the server reads back.
 """
 
 from __future__ import annotations
@@ -11,51 +11,37 @@ from dataclasses import dataclass
 from typing import Literal, NotRequired, TypedDict
 
 from plain_text_memory_mcp.graph import (
-    UNTAGGED,
     Access,
     Entity,
     Graph,
-    Header,
-    Observation,
+    Note,
     Relation,
-    RelationKey,
     Source,
-    Tag,
 )
 
 Record = dict[str, object]
 
 
-class SourceRecord(TypedDict):
-    """An observation that another observation was derived from."""
-
-    entityName: str
-    text: str
-
-
-class ObservationRecord(TypedDict):
-    """One observation as JSON, inside an entity's observations list."""
+class NoteRecord(TypedDict):
+    """One note as JSON, inside an entity's notes list."""
 
     text: str
     added_at: str | None
     agent: str | None
-    edited_at: NotRequired[str | None]
-    edited_by: NotRequired[str | None]
     superseded_at: NotRequired[str | None]
-    superseded_by: NotRequired[str | None]
     replaced_by: NotRequired[str | None]
-    sources: NotRequired[list[SourceRecord]]
+    path: NotRequired[str]
 
 
 class EntityRecord(TypedDict):
-    """One entity line of the memory file."""
+    """One entity as JSON, with its notes."""
 
     type: Literal["entity"]
     name: str
     entityType: str
     added_at: str | None
     agent: str | None
-    observations: list[ObservationRecord]
+    notes: list[NoteRecord]
 
 
 # Functional form: "from" is a Python keyword.
@@ -70,36 +56,54 @@ RelationRecord = TypedDict(
         "agent": str | None,
     },
 )
-RelationRecord.__doc__ = "One relation line of the memory file."
-
-
-class HeaderRecord(TypedDict):
-    """The header line naming the repo that owns the memory file."""
-
-    type: Literal["header"]
-    repo_name: str
-    repo_root: str
-    added_at: str | None
-    agent: str | None
+RelationRecord.__doc__ = "One relation as JSON."
 
 
 class AccessRecord(TypedDict):
-    """One line of the access log beside the memory file."""
+    """One line of the access log in `.agents/ptm/`."""
 
     type: Literal["access"]
     at: str
     entity: str
 
 
-@dataclass(frozen=True)
-class Tombstone:
-    """Mark an entity or relation removed by a line after it.
+RecallEventKind = Literal["recall", "search", "open"]
 
-    - Exactly one of `entity_name` and `relation_key` is set.
+# Log lines quote only the start of each hit; the memory files hold the rest.
+HIT_EXCERPT_LENGTH = 80
+
+
+@dataclass(frozen=True)
+class RecallHit:
+    """Point at one hit a recall step or search returned, for the log."""
+
+    entity_name: str
+    rank: int
+    text: str
+
+
+@dataclass(frozen=True)
+class RecallEvent:
+    """Hold one recall log line: a recall step, a search, or an open.
+
+    - A "recall" line uses every field; a "search" line uses `queries` and
+      `hits`; an "open" line uses `names`.
     """
 
-    entity_name: str | None = None
-    relation_key: RelationKey | None = None
+    kind: RecallEventKind
+    at: str
+    agent: str
+    session: str | None = None
+    step: int | None = None
+    total_steps: int | None = None
+    revises_step: int | None = None
+    thought: str | None = None
+    queries: tuple[str, ...] = ()
+    names: tuple[str, ...] = ()
+    hits: tuple[RecallHit, ...] = ()
+    seen: int = 0
+    conclusion: str | None = None
+    sources: tuple[Source, ...] = ()
 
 
 class GraphRecord(TypedDict):
@@ -109,35 +113,36 @@ class GraphRecord(TypedDict):
     relations: list[RelationRecord]
 
 
-# What each record type is for; published in the taxonomy and its export.
+# What each record type is for; published in the taxonomy.
 RECORD_PURPOSES = {
-    "header": (
-        "First line of the memory file. Names the repo that owns it, so a"
-        " copy in another repo is detected."
-    ),
     "entity": (
-        "A named thing the agents remember, such as a repo, module, library,"
-        " person, or decision, with its observations."
+        "A named thing the agents remember, such as a folder, module,"
+        " library, or decision, with its notes. A heading in a MEMORY.ptm.md"
+        " or AGENTS.md file starts one; a name used in several files is one"
+        " entity."
     ),
     "relation": (
-        "A directed link between two entities, in active voice:"
-        " reading_list uses sqlite."
+        "A directed link between two entities, read from a bullet that is"
+        " one verb and one [[link]], in active voice: reading_list uses"
+        " sqlite."
     ),
-    "observation": (
-        "One fact about an entity, stored inside the entity's observations"
-        " list. edited_at and edited_by appear once its text is edited;"
-        " superseded_at, superseded_by, and replaced_by once it is retired;"
-        " sources when it was derived from other observations."
-    ),
-    "tombstone": (
-        "Removes the entity or relation it names. Writes append changed"
-        " records and tombstones; a later line for the same entity or"
-        " relation replaces an earlier one, until compaction rewrites the"
-        " file with one line per record."
+    "note": (
+        "One fact about an entity, inside its notes list: a bullet of a"
+        " MEMORY.ptm.md file, or a bullet or paragraph of an AGENTS.md file."
+        " path is the file it came from. superseded_at and replaced_by"
+        " appear once the bullet is struck through: superseded_at is its"
+        " retirement stamp and replaced_by the live bullet it is nested"
+        " under."
     ),
     "access": (
-        "One line of memory.local.access.jsonl, appended when an agent opens"
+        "One line of .agents/ptm/access.jsonl, appended when an agent opens"
         " an entity; search ranks often-opened entities higher."
+    ),
+    "recall": (
+        "One line of .agents/ptm/recall.jsonl, a development log written"
+        " only when MEMORY_RECALL_LOG=1: a recall step with its thought,"
+        " queries, hits, and conclusion, or a search_nodes or open_nodes"
+        " call."
     ),
 }
 
@@ -146,43 +151,35 @@ class RecordError(ValueError):
     """Raised when a memory record does not match the expected shape."""
 
 
-def to_observation_record(observation: Observation) -> ObservationRecord:
-    """Return the JSON record for one observation.
+def to_note_record(note: Note) -> NoteRecord:
+    """Return the JSON record for one note.
 
-    - `edited_at` and `edited_by` appear only once the text was edited.
+    - `superseded_at` and `replaced_by` appear only once the note was
+      struck through.
+    - `path` appears only for notes read from a memory file.
     """
-    record: ObservationRecord = {
-        "text": observation.text,
-        "added_at": observation.tag.added_at,
-        "agent": observation.tag.agent,
+    record: NoteRecord = {
+        "text": note.text,
+        "added_at": note.tag.added_at,
+        "agent": note.tag.agent,
     }
-    if observation.edited is not None:
-        record["edited_at"] = observation.edited.added_at
-        record["edited_by"] = observation.edited.agent
-    if observation.superseded is not None:
-        record["superseded_at"] = observation.superseded.added_at
-        record["superseded_by"] = observation.superseded.agent
-        record["replaced_by"] = observation.replaced_by
-    if observation.sources:
-        record["sources"] = [
-            {"entityName": source.entity_name, "text": source.text}
-            for source in observation.sources
-        ]
+    if note.superseded is not None:
+        record["superseded_at"] = note.superseded.added_at
+        record["replaced_by"] = note.replaced_by
+    if note.path is not None:
+        record["path"] = note.path
     return record
 
 
 def to_entity_record(entity: Entity) -> EntityRecord:
-    """Return the JSON record for one entity and its observations."""
+    """Return the JSON record for one entity and its notes."""
     return {
         "type": "entity",
         "name": entity.name,
         "entityType": entity.entity_type,
         "added_at": entity.tag.added_at,
         "agent": entity.tag.agent,
-        "observations": [
-            to_observation_record(observation)
-            for observation in entity.observations
-        ],
+        "notes": [to_note_record(note) for note in entity.notes],
     }
 
 
@@ -198,33 +195,54 @@ def to_relation_record(relation: Relation) -> RelationRecord:
     }
 
 
-def to_header_record(header: Header) -> HeaderRecord:
-    """Return the JSON record for the memory file's owning repo."""
-    return {
-        "type": "header",
-        "repo_name": header.repo_name,
-        "repo_root": header.repo_root,
-        "added_at": header.tag.added_at,
-        "agent": header.tag.agent,
-    }
-
-
 def to_access_record(access: Access) -> AccessRecord:
     """Return the JSON record for one access log line."""
     return {"type": "access", "at": access.at, "entity": access.entity_name}
 
 
-def to_tombstone_record(tombstone: Tombstone) -> dict[str, str]:
-    """Return the JSON record that removes an entity or a relation."""
-    if tombstone.relation_key is None:
-        return {"type": "tombstone", "entity": str(tombstone.entity_name)}
-    source, target, relation_type = tombstone.relation_key
-    return {
-        "type": "tombstone",
-        "from": source,
-        "to": target,
-        "relationType": relation_type,
+def to_recall_record(event: RecallEvent) -> Record:
+    """Return the JSON record for one recall log line.
+
+    - Every line has type, kind, at, and agent; the other fields depend on
+      the kind.
+    """
+    record: Record = {
+        "type": "recall",
+        "kind": event.kind,
+        "at": event.at,
+        "agent": event.agent,
     }
+    if event.kind == "open":
+        record["names"] = list(event.names)
+        return record
+    record["queries"] = list(event.queries)
+    record["hits"] = [
+        {
+            "entity": hit.entity_name,
+            "rank": hit.rank,
+            "text": hit.text[:HIT_EXCERPT_LENGTH],
+        }
+        for hit in event.hits
+    ]
+    if event.kind == "search":
+        return record
+    record.update(
+        {
+            "session": event.session,
+            "step": event.step,
+            "total_steps": event.total_steps,
+            "revises_step": event.revises_step,
+            "thought": event.thought,
+            "names": list(event.names),
+            "seen": event.seen,
+            "conclusion": event.conclusion,
+            "sources": [
+                {"entityName": s.entity_name, "text": s.text}
+                for s in event.sources
+            ],
+        }
+    )
+    return record
 
 
 def to_graph_record(memory: Graph) -> GraphRecord:
@@ -237,103 +255,12 @@ def to_graph_record(memory: Graph) -> GraphRecord:
     }
 
 
-def _parse_tag(raw: dict[str, object]) -> Tag:
-    added_at = raw.get("added_at")
-    agent = raw.get("agent")
-    if added_at is None and agent is None:
-        return UNTAGGED
-    return Tag(
-        added_at if isinstance(added_at, str) else None,
-        agent if isinstance(agent, str) else None,
-    )
-
-
 def _parse_text(raw: dict[str, object], key: str) -> str:
     value = raw.get(key)
     if not isinstance(value, str):
         message = f"field {key!r} must be a string, found {value!r}"
         raise RecordError(message)
     return value
-
-
-def _parse_tag_pair(raw: dict[str, object], at: str, by: str) -> Tag | None:
-    if at not in raw and by not in raw:
-        return None
-    return _parse_tag({"added_at": raw.get(at), "agent": raw.get(by)})
-
-
-def _parse_sources(raw: object) -> tuple[Source, ...]:
-    if not isinstance(raw, list):
-        message = f"sources must be a list, found {raw!r}"
-        raise RecordError(message)
-    sources = []
-    for entry in raw:
-        if not isinstance(entry, dict):
-            message = f"source must be an object, found {entry!r}"
-            raise RecordError(message)
-        sources.append(
-            Source(_parse_text(entry, "entityName"), _parse_text(entry, "text"))
-        )
-    return tuple(sources)
-
-
-def _parse_observation(raw: object) -> Observation:
-    if isinstance(raw, str):
-        return Observation(raw, UNTAGGED)
-    if isinstance(raw, dict):
-        replaced_by = raw.get("replaced_by")
-        return Observation(
-            _parse_text(raw, "text"),
-            _parse_tag(raw),
-            edited=_parse_tag_pair(raw, "edited_at", "edited_by"),
-            superseded=_parse_tag_pair(raw, "superseded_at", "superseded_by"),
-            replaced_by=replaced_by if isinstance(replaced_by, str) else None,
-            sources=_parse_sources(raw.get("sources", [])),
-        )
-    message = f"observation must be a string or object, found {raw!r}"
-    raise RecordError(message)
-
-
-def _parse_entity(raw: dict[str, object]) -> Entity:
-    observations = raw.get("observations", [])
-    if not isinstance(observations, list):
-        message = f"observations must be a list, found {observations!r}"
-        raise RecordError(message)
-    return Entity(
-        _parse_text(raw, "name"),
-        _parse_text(raw, "entityType"),
-        [_parse_observation(observation) for observation in observations],
-        _parse_tag(raw),
-    )
-
-
-def _parse_relation(raw: dict[str, object]) -> Relation:
-    return Relation(
-        _parse_text(raw, "from"),
-        _parse_text(raw, "to"),
-        _parse_text(raw, "relationType"),
-        _parse_tag(raw),
-    )
-
-
-def _parse_header(raw: dict[str, object]) -> Header:
-    return Header(
-        _parse_text(raw, "repo_name"),
-        _parse_text(raw, "repo_root"),
-        _parse_tag(raw),
-    )
-
-
-def _parse_tombstone(raw: dict[str, object]) -> Tombstone:
-    if "entity" in raw:
-        return Tombstone(entity_name=_parse_text(raw, "entity"))
-    return Tombstone(
-        relation_key=(
-            _parse_text(raw, "from"),
-            _parse_text(raw, "to"),
-            _parse_text(raw, "relationType"),
-        )
-    )
 
 
 def parse_access(raw: object) -> Access:
@@ -345,25 +272,3 @@ def parse_access(raw: object) -> Access:
         message = f"not an access record: {raw!r}"
         raise RecordError(message)
     return Access(_parse_text(raw, "at"), _parse_text(raw, "entity"))
-
-
-def parse_record(raw: object) -> Entity | Relation | Header | Tombstone:
-    """Parse one decoded JSON line into a graph record or a tombstone.
-
-    - Accepts legacy untagged records and plain-string observations.
-    - Raises `RecordError` for any other shape.
-    """
-    if not isinstance(raw, dict):
-        message = f"record must be a JSON object, found {raw!r}"
-        raise RecordError(message)
-    kind = raw.get("type")
-    if kind == "entity":
-        return _parse_entity(raw)
-    if kind == "relation":
-        return _parse_relation(raw)
-    if kind == "header":
-        return _parse_header(raw)
-    if kind == "tombstone":
-        return _parse_tombstone(raw)
-    message = f"unknown record type {kind!r}"
-    raise RecordError(message)

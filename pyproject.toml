@@ -6,8 +6,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "plain-text-memory-mcp"
-version = "0.3.0"
-description = "Knowledge-graph memory MCP server that tags entries with date and agent"
+version = "0.4.0"
+description = "MCP server that gathers a repo's Markdown memory files into one searchable, stamped knowledge graph"
 readme = "README.md"
 requires-python = ">=3.12"
 license = "MIT"
@@ -41,33 +41,25 @@ Issues = "https://github.com/PlainTxtOffice/plain-text-memory-mcp/issues"
 plain-text-memory-mcp = "plain_text_memory_mcp.server:main"
 
 [dependency-groups]
-dev = ["pytest>=8"]
+dev = ["pytest>=8", "ruff>=0.14", "rumdl>=0.0.170", "mypy>=1.18"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
 
 [tool.setuptools.package-data]
-plain_text_memory_mcp = ["taxonomy.json", "prompts/*.md"]
+plain_text_memory_mcp = ["taxonomy.json"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["scripts"]
+# A private basetemp avoids WinError 5 crashes at cleanup in the shared
+# pytest-of-<user> folder; tests that need Git make their own repository.
+addopts = "-s --basetemp=tests/.pytest-temp"
 
 
 [tool.mypy]
 exclude = ['(^|[\\/])tests([\\/]|$)']
 ignore_missing_imports = true
+
 [tool.ruff]
 line-length = 80
-
-[tool.rumdl]
-line-length = 80
-respect-gitignore = true
-exclude = [".venv", "build", "dist"]
-
-[tool.rumdl.MD029]
-style = "one"
-
-[tool.rumdl.MD013]
-code-blocks = false
-tables = false

@@ -41,17 +41,22 @@ def calc_personalized_pagerank(
         return dict.fromkeys(nodes, 0.0)
     restart = {node: max(seeds.get(node, 0.0), 0.0) / total for node in nodes}
     neighbors = _build_neighbors(nodes, edges)
+    seeded = {node: share for node, share in restart.items() if share > 0}
     rank = dict(restart)
     for _ in range(ITERATIONS):
         spread = {node: RESTART * restart[node] for node in nodes}
+        # Pool dangling mass and return it to the seeds once per pass, so
+        # isolated nodes cost linear rather than quadratic time.
+        dangling = 0.0
         for node, mass in rank.items():
             walk = (1 - RESTART) * mass
             linked = neighbors[node]
             if not linked:
-                for seed, share in restart.items():
-                    spread[seed] += walk * share
+                dangling += walk
                 continue
             for neighbor in linked:
                 spread[neighbor] += walk / len(linked)
+        for seed, share in seeded.items():
+            spread[seed] += dangling * share
         rank = spread
     return rank

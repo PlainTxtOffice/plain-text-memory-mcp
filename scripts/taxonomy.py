@@ -13,22 +13,21 @@ from __future__ import annotations
 from collections.abc import Mapping
 from importlib.metadata import version as package_version
 from pathlib import Path
-from typing import get_args
 
 import anyio
 from mcp import Client
 
-from plain_text_memory_mcp import agent, records, server
+from plain_text_memory_mcp import agent, records, server, storage
 from plain_text_memory_mcp.graph import (
     UNTAGGED,
     Access,
     Entity,
-    Header,
-    Observation,
+    Note,
     Relation,
     Source,
     Tag,
 )
+from plain_text_memory_mcp.records import RecallEvent, RecallHit
 
 PACKAGE_NAME = "plain-text-memory-mcp"
 CONTENT_KEYS = (
@@ -51,7 +50,7 @@ _DESCRIPTIVE_KEYS = {
 }
 _BUMP_ORDER = ("patch", "minor", "major")
 _SAMPLE_TAG = Tag("2026-01-01T00:00:00+00:00", "codex")
-_JSON_TYPE_NAMES = {str: "string", type(None): "null"}
+_JSON_TYPE_NAMES = {str: "string", int: "integer", type(None): "null"}
 
 
 def _map_field_type(key: str, values: list[object]) -> str:
@@ -60,7 +59,10 @@ def _map_field_type(key: str, values: list[object]) -> str:
     names: list[str] = []
     for value in values:
         if isinstance(value, list):
-            name = f"{key.removesuffix('s')}[]"
+            singular = (
+                f"{key[:-3]}y" if key.endswith("ies") else key.removesuffix("s")
+            )
+            name = f"{singular}[]"
         else:
             name = _JSON_TYPE_NAMES[type(value)]
         if name not in names:
@@ -80,12 +82,8 @@ def _map_record_fields(samples: list[Mapping[str, object]]) -> dict[str, str]:
     return fields
 
 
-def _build_record_types() -> dict[str, object]:
+def _build_record_types() -> dict[str, dict[str, object]]:
     samples: dict[str, list[Mapping[str, object]]] = {
-        "header": [
-            records.to_header_record(Header("repo", "D:/repo", tag))
-            for tag in (_SAMPLE_TAG, UNTAGGED)
-        ],
         "entity": [
             records.to_entity_record(Entity("name", "kind", [], tag))
             for tag in (_SAMPLE_TAG, UNTAGGED)
@@ -94,34 +92,76 @@ def _build_record_types() -> dict[str, object]:
             records.to_relation_record(Relation("a", "b", "uses", tag))
             for tag in (_SAMPLE_TAG, UNTAGGED)
         ],
-        "observation": [
-            records.to_observation_record(
-                Observation(
-                    "text", tag, edited, superseded, replaced_by, sources
+        "note": [
+            records.to_note_record(
+                Note(
+                    "text",
+                    tag,
+                    superseded=superseded,
+                    replaced_by=replaced_by,
+                    path=path,
                 )
             )
             for tag in (_SAMPLE_TAG, UNTAGGED)
-            for edited in (None, tag)
             for superseded, replaced_by in ((None, None), (tag, "new text"))
-            for sources in ((), (Source("name", "text"),))
-        ],
-        "tombstone": [
-            records.to_tombstone_record(records.Tombstone(entity_name="a")),
-            records.to_tombstone_record(
-                records.Tombstone(relation_key=("a", "b", "uses"))
-            ),
+            for path in (None, "MEMORY.ptm.md")
         ],
         "access": [
             records.to_access_record(Access(str(_SAMPLE_TAG.added_at), "a"))
         ],
+        "recall": [
+            records.to_recall_record(event)
+            for event in (
+                RecallEvent(
+                    "recall",
+                    str(_SAMPLE_TAG.added_at),
+                    "codex",
+                    session="1a2b3c4d",
+                    step=1,
+                    total_steps=2,
+                    thought="why",
+                    queries=("query",),
+                    names=("a",),
+                    hits=(RecallHit("a", 1, "text"),),
+                ),
+                RecallEvent(
+                    "recall",
+                    str(_SAMPLE_TAG.added_at),
+                    "codex",
+                    session="1a2b3c4d",
+                    step=2,
+                    total_steps=2,
+                    revises_step=1,
+                    thought="why",
+                    conclusion="done",
+                    sources=(Source("a", "text"),),
+                ),
+                RecallEvent(
+                    "search",
+                    str(_SAMPLE_TAG.added_at),
+                    "codex",
+                    queries=("query",),
+                    hits=(RecallHit("a", 1, "text"),),
+                ),
+                RecallEvent(
+                    "open", str(_SAMPLE_TAG.added_at), "codex", names=("a",)
+                ),
+            )
+        ],
     }
-    return {
+    record_types: dict[str, dict[str, object]] = {
         kind: {
             "purpose": records.RECORD_PURPOSES[kind],
             "fields": _map_record_fields(values),
         }
         for kind, values in samples.items()
     }
+    # A note is never its own line; it lives in its entity's notes list.
+    note = record_types.pop("note")
+    entity_fields = record_types["entity"]["fields"]
+    assert isinstance(entity_fields, dict)
+    entity_fields["notes"] = {"type": entity_fields["notes"], **note}
+    return record_types
 
 
 def _map_schema(schema: dict, defs: dict) -> object:
@@ -146,7 +186,8 @@ def _map_schema(schema: dict, defs: dict) -> object:
 
 
 async def _fetch_listing() -> tuple[list, list, list]:
-    app = server.build_server(Path("taxonomy.jsonl"), None, Path("taxonomy"))
+    root = Path("taxonomy")
+    app = server.build_server(storage.calc_state_path(root), None, root)
     async with Client(app) as client:
         tools = (await client.list_tools()).tools
         resources = (await client.list_resources()).resources
@@ -225,7 +266,6 @@ def _build_enums(
             # "string|null" is an optional type, not a set of choices.
             if not set(values) <= _JSON_TYPES:
                 enums[f"{tool_name}.{param}"] = values
-    enums["initialize_memory.status"] = list(get_args(server.InitStatus))
     return enums
 
 

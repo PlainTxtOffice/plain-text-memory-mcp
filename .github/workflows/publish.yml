@@ -1,10 +1,11 @@
-# Publish to PyPI when a version tag such as v0.1.0 is pushed. Uses PyPI
-# Trusted Publishing: PyPI trusts this workflow, so no API token exists.
+# Publish to PyPI when a GitHub release such as v0.1.0 is published; see
+# dev-docs/RELEASING.md. Uses PyPI Trusted Publishing: PyPI trusts this
+# workflow, so no API token exists.
 name: Publish
 
 on:
-  push:
-    tags: ["v*"]
+  release:
+    types: [published]
 
 permissions:
   contents: read
@@ -17,7 +18,9 @@ jobs:
     needs: ci
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
       - uses: astral-sh/setup-uv@v10.2.0
       - name: Check that the tag matches the package version
         run: |
@@ -37,6 +40,7 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: pypi
+      # Rename with the package.
       url: https://pypi.org/p/plain-text-memory-mcp
     permissions:
       id-token: write

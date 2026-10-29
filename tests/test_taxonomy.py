@@ -130,33 +130,23 @@ def test_highest_bump_wins_and_changelog_is_newest_first() -> None:
 def test_build_content_reads_tools_records_and_enums() -> None:
     content = taxonomy.build_content()
     tools = content["tools"]
-    assert tools["initialize_memory"]["params"] == {"mode": "fresh|adopt"}
-    assert tools["create_entities"]["params"] == {
-        "entities": [
-            {
-                "name": "string",
-                "entityType": "string",
-                "observations": ["string"],
-            }
-        ]
-    }
-    assert content["enums"]["initialize_memory.status"] == [
-        "unchanged",
-        "fresh",
-        "initialized",
-        "adopted",
-    ]
+    assert tools["stamp_notes"]["params"] == {"paths": ["string"]}
     assert content["enums"]["agent"] == ["claude-code", "codex", "unknown"]
     # An optional parameter is a type, not a set of allowed values.
-    assert "read_graph.since" not in content["enums"]
-    header = content["record_types"]["header"]["fields"]
-    assert header["type"] == '"header"'
-    assert header["added_at"] == "string|null"
+    assert "search_nodes.since" not in content["enums"]
     entity = content["record_types"]["entity"]["fields"]
-    assert entity["observations"] == "observation[]"
-    observation = content["record_types"]["observation"]["fields"]
-    assert observation["agent"] == "string|null"
-    assert observation["edited_at"] == "string|null (optional)"
+    assert entity["type"] == '"entity"'
+    assert entity["added_at"] == "string|null"
+    # A note is nested in its entity, not listed as its own record type.
+    assert "note" not in content["record_types"]
+    assert entity["notes"]["type"] == "note[]"
+    assert entity["notes"]["purpose"] == records.RECORD_PURPOSES["note"]
+    note = entity["notes"]["fields"]
+    assert note["agent"] == "string|null"
+    assert note["superseded_at"] == "string|null (optional)"
+    assert "edited_at" not in note
+    assert "sources" not in note
+    assert note["path"] == "string (optional)"
 
 
 def test_committed_taxonomy_is_current() -> None:
@@ -172,15 +162,9 @@ def test_committed_taxonomy_is_current() -> None:
 def test_build_content_gives_each_record_type_a_purpose() -> None:
     record_types = taxonomy.build_content()["record_types"]
     purposes = {kind: spec["purpose"] for kind, spec in record_types.items()}
+    purposes["note"] = record_types["entity"]["fields"]["notes"]["purpose"]
     assert purposes == records.RECORD_PURPOSES
-    assert set(purposes) == {
-        "header",
-        "entity",
-        "relation",
-        "observation",
-        "tombstone",
-        "access",
-    }
+    assert set(purposes) == {"entity", "relation", "note", "access", "recall"}
 
 
 def test_purpose_change_bumps_patch() -> None:
@@ -195,20 +179,20 @@ def test_purpose_change_bumps_patch() -> None:
 def test_build_content_reads_tool_returns() -> None:
     tools = taxonomy.build_content()["tools"]
     assert all("returns" in spec for spec in tools.values())
-    assert tools["create_relations"]["returns"]["skipped"] == [
+    assert tools["stamp_notes"]["returns"]["files"] == [
         {
-            "from": "string",
-            "to": "string",
-            "relationType": "string",
-            "missing": ["string"],
+            "path": "string",
+            "stamped": "integer",
+            "retired": "integer",
+            "archived": "integer",
         }
     ]
-    relation = tools["read_graph"]["returns"]["relations"][0]
+    relation = tools["open_nodes"]["returns"]["relations"][0]
     assert relation["type"] == '"relation"'
     assert relation["added_at"] == "string|null"
-    assert tools["initialize_memory"]["returns"]["status"] == (
-        "unchanged|fresh|initialized|adopted"
-    )
+    warning = tools["stamp_notes"]["returns"]["warnings"][0]
+    kinds = "near_duplicate|instruction_like|secret|broken_link|long_file"
+    assert warning["kind"] == f"{kinds}|no_reason"
 
 
 def test_build_content_reads_resources() -> None:
@@ -221,12 +205,8 @@ def test_build_content_reads_resources() -> None:
     assert resource["description"].startswith("The server's versioned schema")
 
 
-def test_build_content_reads_prompts() -> None:
-    prompts = taxonomy.build_content()["prompts"]
-    assert list(prompts) == ["cleanup", "export", "reflect"]
-    assert prompts["cleanup"]["title"] == "Clean up memory"
-    assert prompts["export"]["arguments"] == []
-    assert prompts["export"]["description"].startswith("Write this repo's")
+def test_build_content_reads_no_prompts() -> None:
+    assert taxonomy.build_content()["prompts"] == {}
 
 
 def test_dropped_section_bumps_major() -> None:
