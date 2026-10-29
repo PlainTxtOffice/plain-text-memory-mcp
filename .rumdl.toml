@@ -1,0 +1,41 @@
+[global]
+# Match the 80-column wrap used by ruff and the editor.
+line-length = 80
+
+exclude = [".venv", "build", "dist"]
+# Also covers the ignored paths not listed above, such as .pytest_cache/ and
+# logs/, and keeps covering whatever .gitignore gains later.
+respect-gitignore = true
+
+[MD010]
+# Expand tabs to 2 spaces, not the default 4.
+spaces-per-tab = 2
+[MD029]
+# Style options:
+# - "one" or "one-one": All items numbered "1." (easiest maintenance)
+# - "ordered": Sequential numbering (1, 2, 3...)
+# - "ordered0": Zero-based sequential (0, 1, 2...)
+# - "one-or-ordered": Auto-detect per list (either all-ones OR sequential)
+# - "consistent": Document-wide consistency - uses most common style across all lists
+style = "one"
+
+[MD013]
+# Commands and paths inside fenced blocks cannot be wrapped to 80.
+code-blocks = false
+# Markdown table rows cannot be wrapped without breaking their structure.
+tables = false
+# Let `rumdl fmt` rewrap paragraphs, list items, and blockquotes whose lines
+# run past line-length. The default mode leaves lines already under the
+# limit alone, unlike "normalize".
+reflow = true
+reflow-mode = "default"
+
+[MD060]
+enabled = true
+style = "compact"
+
+[per-file-ignores]
+# Skills name themselves in front matter, not with a top-level heading.
+"**/SKILL.md" = ["MD041"]
+# Memory files keep each fact on one line, so long lines are expected.
+"**/MEMORY.ptm*.md" = ["MD013"]

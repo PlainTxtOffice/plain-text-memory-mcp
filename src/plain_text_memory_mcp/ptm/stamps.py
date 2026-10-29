@@ -65,7 +65,9 @@ def is_hash_of(stamp_hash: str, text_hash: str) -> bool:
 
 def format_moment(moment: datetime) -> str:
     """Return a stamp time: ISO 8601 to the minute, with UTC offset."""
-    return moment.astimezone().isoformat(timespec="minutes")
+    if moment.tzinfo is None:
+        moment = moment.astimezone()
+    return moment.isoformat(timespec="minutes")
 
 
 def normalize_agent(agent: str) -> str:
