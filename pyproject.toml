@@ -52,9 +52,10 @@ plain_text_memory_mcp = ["taxonomy.json"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["scripts"]
-# A private basetemp avoids WinError 5 crashes at cleanup in the shared
-# pytest-of-<user> folder; tests that need Git make their own repository.
-addopts = "-s --basetemp=tests/.pytest-temp"
+# Keep pytest temp folders outside the repository and isolate each account.
+addopts = "-s"
+tmp_path_retention_policy = "none"
+cache_dir = "$PYTEST_ACCOUNT_ROOT/cache"
 
 
 [tool.mypy]

@@ -1,7 +1,32 @@
-# plain-text-memory-mcp
+<!-- last_updated: 2026-11-13 -->
+<!-- rumdl-disable MD033 MD041 -->
+<p align="center">
+  <img src="https://raw.githubusercontent.com/PlainTxtOffice/plain-text-memory-mcp/main/assets/icons/plain-text-memory.svg" alt="Plain Text Memory icon: a text document with three connected memory nodes" width="96">
+</p>
 
-MCP server that gathers a repo's Markdown memory files into one searchable,
-stamped knowledge graph.
+<h1 align="center">plain-text-memory-mcp</h1>
+
+<p align="center">
+  MCP server that gathers a repo's Markdown memory files into one searchable,
+  stamped knowledge graph.
+</p>
+
+<p align="center">
+  <a href="https://pypi.org/project/plain-text-memory-mcp/"><img src="https://img.shields.io/pypi/v/plain-text-memory-mcp?label=pypi" alt="Latest version on PyPI"></a>
+  <a href="https://pypi.org/project/plain-text-memory-mcp/"><img src="https://img.shields.io/pypi/pyversions/plain-text-memory-mcp" alt="Supported Python versions"></a>
+  <a href="https://github.com/PlainTxtOffice/plain-text-memory-mcp/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-informational" alt="License: MIT"></a>
+</p>
+
+<p align="center">
+  <a href="#install">Install</a> ·
+  <a href="#configure">Configure</a> ·
+  <a href="#search">Search</a> ·
+  <a href="https://github.com/PlainTxtOffice/plain-text-memory-mcp/blob/main/docs/USER_MANUAL.md">User manual</a> ·
+  <a href="https://pypi.org/project/plain-text-memory-mcp/">PyPI</a>
+</p>
+<!-- rumdl-enable MD033 MD041 -->
+
+---
 
 Agents keep memory in `MEMORY.ptm.md` files, one per folder that needs it,
 and edit them with their normal file tools. The server reads every such file,
@@ -15,8 +40,9 @@ its own: the Markdown files are the memory, and they belong in git.
 
 ## Install
 
-The server runs with [uv](https://docs.astral.sh/uv/); `uvx` downloads and
-starts it on demand, so there is nothing else to install.
+The package requires Python 3.12 or later. The server runs with
+[uv](https://docs.astral.sh/uv/); `uvx` downloads and starts it on demand, so
+there is nothing else to install.
 
 ```shell
 uvx plain-text-memory-mcp
@@ -57,6 +83,7 @@ Cursor, `.cursor/mcp.json` in the repo:
 {
   "mcpServers": {
     "plain-text-memory": {
+      "type": "stdio",
       "command": "uvx",
       "args": ["plain-text-memory-mcp"]
     }
@@ -108,9 +135,9 @@ Ranks notes with BM25 plus spreading activation.
   file.
 
 The server finds the files with `git ls-files`, so `.gitignore` decides
-which are skipped; outside git, it skips dot folders. It reads `AGENTS.md`
-files too, as read-only notes grouped by heading. Edits show up in the next
-search without a restart.
+which are skipped; outside git, it skips dot folders, `node_modules`, and
+`__pycache__`. It reads `AGENTS.md` files too, as read-only notes grouped by
+heading. Edits show up in the next search without a restart.
 
 ## Stamps
 
@@ -119,12 +146,12 @@ Agents never write the `<!-- -->` comments. After editing, an agent calls
 new or reworded line:
 
 - the time (local, to the minute, with UTC offset),
-- the agent (`claude-code`, `codex`, or the client's own name; set
-  `MEMORY_AGENT` to override it), and
+- the agent (`claude-code`, `codex`, the client's own name, or `unknown`
+  when the client sends no name; set `MEMORY_AGENT` to override it), and
 - a short hash of the text, so a reworded line is stamped again.
 
-A newly struck line gets its retirement time. Struck lines retired more than
-90 days ago move to `MEMORY.ptm.archive.md` in the same folder, so live
+A newly struck line gets its retirement time. Struck lines retired 90 days
+or more ago move to `MEMORY.ptm.archive.md` in the same folder, so live
 files stay short. Only the named files change. Lines nobody has stamped,
 and all `AGENTS.md` text, show `null` for the date and agent.
 
@@ -191,7 +218,8 @@ tool does and returns. No agent-specific setup is needed.
 
 ## Taxonomy
 
-[taxonomy.json](src/plain_text_memory_mcp/taxonomy.json) lists every record
+[taxonomy.json](https://github.com/PlainTxtOffice/plain-text-memory-mcp/blob/main/src/plain_text_memory_mcp/taxonomy.json)
+lists every record
 type with its purpose and fields, every tool with its parameters and results,
 every MCP resource, and the allowed values for enum fields such as `agent`.
 It is generated from the code; do not edit it by hand. Record type purposes
@@ -241,6 +269,20 @@ Set `MEMORY_RECALL_LOG=1` in the server's environment to append every
 the conclusion. The log is for developing the server; it is off by default
 and never read back.
 
+## Feedback
+
+Report a bug or request a feature in
+[GitHub Issues](https://github.com/PlainTxtOffice/plain-text-memory-mcp/issues),
+or use the
+[contact form](https://plaintxtoffice.com/contact/).
+
+## User Manual
+
+The
+[User Manual](https://github.com/PlainTxtOffice/plain-text-memory-mcp/blob/main/docs/USER_MANUAL.md)
+covers installation, client configuration, tools, settings, and troubleshooting.
+
 ## License
 
-MIT, copyright Plain Text Office LLC. See [LICENSE](LICENSE).
+MIT, copyright Plain Text Office LLC. See
+[LICENSE](https://github.com/PlainTxtOffice/plain-text-memory-mcp/blob/main/LICENSE).

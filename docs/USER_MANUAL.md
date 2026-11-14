@@ -1,5 +1,5 @@
 ---
-last_updated: 2026-10-28
+last_updated: 2026-11-13
 version: 1.1.0
 product_version: "0.4.0"
 generated_from: "dev-docs/specs/USER_MANUAL_SPEC.instructions.md"
@@ -775,6 +775,13 @@ It follows no special format:
 | `recall` warns "Session … is unknown, perhaps from before a server restart". | Sessions are lost when the server restarts. | None needed; the step ran in a new session. Use the new `session` id from then on. |
 | A retired fact is gone from its file. | It was retired 90 days or more ago and moved on the next stamp. | Open `MEMORY.ptm.archive.md` in the same folder. |
 <!-- Verified from: src/plain_text_memory_mcp/server.py [_FILE_ACCESS_HINT, _LOCK_TIMEOUT_HINT, _MEMORY_PATH_HINT, _MOMENT_FORMAT_HINT, _resolve_memory_file, recall, main]; src/plain_text_memory_mcp/storage.py [lock_memory, look_repo_root]; src/plain_text_memory_mcp/ptm/parser.py [parse_file, _parse_relation]; src/plain_text_memory_mcp/agent.py; src/plain_text_memory_mcp/ptm/stamping.py; https://docs.astral.sh/uv/concepts/tools/; https://docs.astral.sh/uv/reference/cli/#uv-tool-install; https://code.claude.com/docs/en/mcp; https://learn.chatgpt.com/docs/extend/mcp?surface=cli; https://cursor.com/docs/context/mcp; https://code.visualstudio.com/docs/agents/run/manage-mcp-servers; https://code.visualstudio.com/docs/copilot/reference/mcp-configuration -->
+
+To report a bug that is not listed here, or to request a feature, open an issue
+in
+[GitHub Issues](https://github.com/PlainTxtOffice/plain-text-memory-mcp/issues)
+or use the
+[contact form](https://plaintxtoffice.com/contact/).
+<!-- Verified from: pyproject.toml [project.urls]; https://plaintxtoffice.com/contact/ -->
 
 ## FAQ
 
