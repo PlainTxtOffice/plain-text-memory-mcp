@@ -1,8 +1,8 @@
 {
-  "taxonomy_version": "7.0.0",
+  "taxonomy_version": "7.0.1",
   "package": {
     "name": "plain-text-memory-mcp",
-    "version": "0.4.0"
+    "version": "0.4.1"
   },
   "record_types": {
     "entity": {
@@ -293,6 +293,13 @@
   },
   "prompts": {},
   "changelog": [
+    {
+      "version": "7.0.1",
+      "date": "2026-11-19",
+      "changes": [
+        "changed: package.version"
+      ]
+    },
     {
       "version": "7.0.0",
       "date": "2026-10-26",

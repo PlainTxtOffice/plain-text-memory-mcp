@@ -1,7 +1,7 @@
 ---
 last_updated: 2026-11-19
 version: 1.2.0
-product_version: "0.4.0"
+product_version: "0.4.1"
 generated_from: "dev-docs/specs/USER_MANUAL_SPEC.instructions.md"
 ---
 

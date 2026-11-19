@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "plain-text-memory-mcp"
-version = "0.4.0"
+version = "0.4.1"
 description = "MCP server that gathers a repo's Markdown memory files into one searchable, stamped knowledge graph"
 readme = "README.md"
 requires-python = ">=3.12"
