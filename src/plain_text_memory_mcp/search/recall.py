@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import secrets
 import threading
-from collections import Counter
+from collections import Counter, OrderedDict
 from dataclasses import dataclass, field
 from datetime import datetime
 
@@ -26,6 +26,8 @@ UNOPENED_LIMIT = 8
 AUTO_OPEN_MAX_FACTS = 8
 # Most entities one step opens on its own.
 AUTO_OPEN_LIMIT = 3
+# Most sessions kept; a long-running server forgets the least recently used.
+SESSION_LIMIT = 256
 
 HitKey = tuple[str, str]
 
@@ -56,10 +58,14 @@ class StepHits:
 
 
 class SessionRegistry:
-    """Store recall sessions by id for the life of the server."""
+    """Store recall sessions by id, up to `limit`, least recent dropped first.
 
-    def __init__(self) -> None:
-        self._sessions: dict[str, Session] = {}
+    - A dropped session's id reads as unknown, as after a restart.
+    """
+
+    def __init__(self, limit: int = SESSION_LIMIT) -> None:
+        self._sessions: OrderedDict[str, Session] = OrderedDict()
+        self._limit = limit
         self._lock = threading.Lock()
 
     def look(self, session_id: str | None) -> Session | None:
@@ -67,7 +73,10 @@ class SessionRegistry:
         if session_id is None:
             return None
         with self._lock:
-            return self._sessions.get(session_id)
+            session = self._sessions.get(session_id)
+            if session is not None:
+                self._sessions.move_to_end(session_id)
+            return session
 
     def init(self) -> Session:
         """Start a session under a new 8-hex-digit id."""
@@ -77,6 +86,8 @@ class SessionRegistry:
                 session_id = secrets.token_hex(4)
             session = Session(session_id)
             self._sessions[session_id] = session
+            while len(self._sessions) > self._limit:
+                self._sessions.popitem(last=False)
             return session
 
 

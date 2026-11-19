@@ -21,6 +21,9 @@ from plain_text_memory_mcp.ptm.stamps import Stamp, split_stamp
 FILE_NAME = "MEMORY.ptm.md"
 ARCHIVE_FILE_NAME = "MEMORY.ptm.archive.md"
 
+# Some editors start UTF-8 files with a byte order mark; it is not text.
+_BOM = "\ufeff"
+
 # A memory file longer than this many lines draws a warning when stamped,
 # so each file stays short enough to read whole.
 MAX_FILE_LINES = 200
@@ -118,7 +121,8 @@ def parse_file(text: str, default_name: str) -> MemoryFile:
 
     - `default_name` names the folder entity when the file has no `#`
       heading before its first bullet or `##` heading.
-    - Lines may end in CRLF; the `\\r` is ignored.
+    - Lines may end in CRLF; the `\\r` is ignored, as is a leading
+      byte order mark.
     """
     folder_entity = default_name
     entity = default_name
@@ -128,7 +132,7 @@ def parse_file(text: str, default_name: str) -> MemoryFile:
     stack: list[Bullet] = []
     in_fence = False
     in_summary = True
-    for index, raw in enumerate(text.split("\n")):
+    for index, raw in enumerate(text.removeprefix(_BOM).split("\n")):
         line = raw.rstrip("\r")
         if _FENCE_PATTERN.match(line):
             in_fence = not in_fence
@@ -195,7 +199,7 @@ def parse_agents_file(text: str, default_name: str) -> MemoryFile:
     blocks: list[tuple[int, str, list[str]]] = []
     is_open = False
     in_fence = False
-    for index, raw in enumerate(text.split("\n")):
+    for index, raw in enumerate(text.removeprefix(_BOM).split("\n")):
         line = raw.rstrip("\r").strip()
         if _FENCE_PATTERN.match(line):
             in_fence = not in_fence

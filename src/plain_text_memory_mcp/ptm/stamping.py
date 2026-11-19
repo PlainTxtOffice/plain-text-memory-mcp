@@ -143,6 +143,8 @@ def archive_retired(
     - A moved note keeps its stamp; a superseded one also records its
       replacement's hash, since its nesting does not survive the move.
     - The archive's notes go under the same entity heading as before.
+    - A line the archive already holds is not added again, so a stamp that
+      wrote the archive but failed to rewrite the file repeats nothing.
     """
     memory_file = parser.parse_file(text, default_name)
     due = [bullet for bullet in memory_file.bullets if _is_due(bullet, now)]
@@ -153,10 +155,12 @@ def archive_retired(
     if not archive_lines:
         archive_lines = [f"# {folder}", ""]
     for bullet in due:
+        line = _calc_archive_line(bullet, memory_file)
+        if line in archive_lines:
+            continue
         index = _look_insert_index(archive_lines, bullet.entity, folder)
         while index > 0 and not archive_lines[index - 1].strip():
             index -= 1
-        line = _calc_archive_line(bullet, memory_file)
         archive_lines.insert(index, line)
     doomed = {bullet.line for bullet in due}
     kept = [

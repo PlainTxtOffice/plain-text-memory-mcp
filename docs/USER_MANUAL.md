@@ -1,6 +1,6 @@
 ---
-last_updated: 2026-11-13
-version: 1.1.0
+last_updated: 2026-11-19
+version: 1.2.0
 product_version: "0.4.0"
 generated_from: "dev-docs/specs/USER_MANUAL_SPEC.instructions.md"
 ---
@@ -47,7 +47,7 @@ Codex, Cursor, and VS Code. Stamps name Claude Code and Codex as
 | --- | --- |
 | [uv](https://docs.astral.sh/uv/) | Provides `uvx`, which downloads and runs the server, and `uv tool install` for a local copy. |
 | Python 3.12 or later | The package requires it. |
-| A git repo (recommended) | The server finds the repo root from `.git` and uses git to decide which files to skip. Without git it still works on the folder it starts in. |
+| A git repo (recommended) | The server finds the repo root from `.git` and uses git to decide which files to skip. Without git it works on the folder it starts in, if that folder holds a `MEMORY.ptm.md` or `AGENTS.md`. |
 <!-- Verified from: pyproject.toml [project.requires-python, project.dependencies]; src/plain_text_memory_mcp/server.py [main]; src/plain_text_memory_mcp/ptm/index.py [look_memory_files] -->
 
 ### Run the Published Package
@@ -127,8 +127,12 @@ the client starts it in:
 1. It looks for the nearest folder at or above the working directory that
    contains `.git`. A `.git` file counts too, so a git worktree uses its own
    root.
-1. Outside git, it uses the working directory itself.
-<!-- Verified from: src/plain_text_memory_mcp/server.py [main]; src/plain_text_memory_mcp/storage.py [look_repo_root] -->
+1. Outside git, it uses the working directory itself, but only if that
+   folder directly holds a `MEMORY.ptm.md` or `AGENTS.md` file. Otherwise
+   every tool fails with a message saying where to start the server, and
+   nothing is written. This keeps a client that starts servers in your
+   home folder from searching all of it.
+<!-- Verified from: src/plain_text_memory_mcp/server.py [main, need_root]; src/plain_text_memory_mcp/storage.py [look_repo_root, look_memory_root] -->
 
 So the server must start inside the repo whose memory you want. The
 configuration blocks below go in each project's own configuration file.
@@ -660,7 +664,7 @@ The server reads and writes only files inside the repo.
 | `MEMORY.ptm.archive.md` | Beside a `MEMORY.ptm.md` | Struck facts retired 90 days or more ago. Not searched. | Yes, but it is a record; usually leave it. |
 | `AGENTS.md` | Any folder in the repo | Agent instructions, read as unstamped notes. | Yes. The server never changes it. |
 | `.agents/ptm/stamp.lock` | Repo root | Lets one agent stamp at a time, so two agents can share a repo. | No. A leftover file is harmless. |
-| `.agents/ptm/access.jsonl` | Repo root | Logs each opened entity, to rank often-opened ones higher. | No. Deleting it only resets that ranking. |
+| `.agents/ptm/access.jsonl` | Repo root | Logs each opened entity, to rank often-opened ones higher. Past 5,000 lines it is trimmed to the newest opens. | No. Deleting it only resets that ranking. |
 | `.agents/ptm/recall.jsonl` | Repo root | Logs searches, opens, and recall steps when `MEMORY_RECALL_LOG=1`. | No. Never read back by the server. |
 <!-- Verified from: src/plain_text_memory_mcp/storage.py [calc_state_path, lock_memory, calc_access_path, read_accesses, calc_recall_path]; src/plain_text_memory_mcp/ptm/parser.py [FILE_NAME, ARCHIVE_FILE_NAME]; src/plain_text_memory_mcp/ptm/index.py -->
 
@@ -682,8 +686,12 @@ out with this `.gitignore` line:
   dot folders, `node_modules`, and `__pycache__`.
 - File names match case-sensitively, even on Windows.
 - Changed files are re-read on the next tool call; no restart is needed.
-- The server reads and writes memory files as UTF-8.
-<!-- Verified from: src/plain_text_memory_mcp/ptm/index.py [look_memory_files, _list_git_files, _walk_files, read_memory_file]; src/plain_text_memory_mcp/server.py [_read_text, _write_text] -->
+- The server reads and writes memory files as UTF-8. A leading byte order
+  mark is ignored and kept. `stamp_notes` refuses a file that is not valid
+  UTF-8 rather than rewrite it.
+- Stamping replaces each file in one step, so a crash never leaves a file
+  half written.
+<!-- Verified from: src/plain_text_memory_mcp/ptm/index.py [look_memory_files, _list_git_files, _walk_files, read_memory_file]; src/plain_text_memory_mcp/ptm/parser.py [parse_file]; src/plain_text_memory_mcp/server.py [_read_text, _write_text]; src/plain_text_memory_mcp/storage.py [write_atomic] -->
 
 ### The MEMORY.ptm.md Format
 
@@ -759,6 +767,8 @@ It follows no special format:
 | Codex ignores the project's `.codex/config.toml`. | Codex reads project configuration only in trusted projects. | Make the project a trusted project, or add the server to `~/.codex/config.toml`. |
 | The server does not appear in Cursor's chat. | The server is turned off. | Turn it on under **Customize** in the sidebar, and check **MCP Logs** in the Output panel. |
 | VS Code still runs the old configuration. | The server was not restarted. | Run **MCP: List Servers**, select the server, and choose **Restart Server**. |
+| "No git repo or memory file found." | The client started the server in a folder that is not in a git repo and holds no `MEMORY.ptm.md` or `AGENTS.md`. | Make sure the client starts the server inside the repo. In Codex or VS Code, set `cwd`. |
+| "… not valid UTF-8 at byte …" | The memory file was saved in another encoding. | Save it as UTF-8 in your editor, then stamp again. |
 | Search shows memory from the wrong repo, or none. | The server started outside the repo. | Make sure the client starts the server in a folder inside the repo. In Codex or VS Code, set `cwd` to a folder inside the repo. |
 | A fact you wrote never turns up in search. | The file is ignored by `.gitignore`, its name differs in case (such as `Memory.ptm.md`), or it is under a `###` heading or in a code block. | Name it exactly `MEMORY.ptm.md`, make sure git does not ignore it, and put facts under `##` headings. |
 | Only the first part of a fact is found. | The fact wraps onto a second line, which is not part of the bullet. | Keep each fact on one line. |

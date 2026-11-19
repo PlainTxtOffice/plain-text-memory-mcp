@@ -6,6 +6,7 @@ from importlib import metadata
 from pathlib import Path
 
 import anyio
+import pytest
 from mcp import Client
 from mcp.server.mcpserver import MCPServer
 from mcp.types import CallToolResult, Implementation
@@ -429,3 +430,56 @@ def test_taxonomy_is_a_readable_resource(tmp_path: Path) -> None:
     assert resource.title
     assert resource.description
     assert json.loads(text) == storage.load_schema()
+
+
+def test_without_a_root_every_tool_fails_and_writes_nothing(
+    tmp_path: Path,
+) -> None:
+    server = build_server(storage.calc_state_path(tmp_path), None, None)
+    results = _run_calls(
+        server,
+        [
+            ("search_nodes", {"query": "sqlite"}),
+            ("open_nodes", {"names": ["app"]}),
+            ("stamp_notes", {"paths": ["MEMORY.ptm.md"]}),
+            (
+                "recall",
+                {
+                    "thought": "t",
+                    "step": 1,
+                    "total_steps": 1,
+                    "next_step_needed": True,
+                    "queries": ["sqlite"],
+                },
+            ),
+        ],
+    )
+    for result in results:
+        assert result.is_error
+        assert "No git repo or memory file found" in str(result.content)
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_stamp_notes_refuses_files_that_are_not_utf8(tmp_path: Path) -> None:
+    (tmp_path / "MEMORY.ptm.md").write_bytes(b"- Caf\xe9 opens at 9.\n")
+    result = _call(
+        _server(tmp_path), "stamp_notes", {"paths": ["MEMORY.ptm.md"]}
+    )
+    assert result.is_error
+    assert "not valid UTF-8" in str(result.content)
+    assert (
+        tmp_path / "MEMORY.ptm.md"
+    ).read_bytes() == b"- Caf\xe9 opens at 9.\n"
+
+
+def test_search_compacts_a_long_access_log(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(storage, "ACCESS_COMPACT_AT", 4)
+    _write(tmp_path, "MEMORY.ptm.md", ROOT_MEMORY)
+    server = _server(tmp_path)
+    for _ in range(5):
+        _call(server, "open_nodes", {"names": ["sqlite"]})
+    _call(server, "search_nodes", {"query": "sqlite"})
+    access_path = storage.calc_access_path(storage.calc_state_path(tmp_path))
+    assert len(storage.read_accesses(access_path)) == 2

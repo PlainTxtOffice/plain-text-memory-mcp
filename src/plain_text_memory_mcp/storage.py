@@ -11,8 +11,11 @@ from __future__ import annotations
 import codecs
 import json
 import os
+import shutil
 import sys
+import tempfile
 import time
+from collections import Counter
 from collections.abc import Generator, Mapping
 from contextlib import contextmanager
 from importlib import resources
@@ -39,6 +42,12 @@ _LOCK_RETRY_DELAYS = (0.05, 0.1, 0.2, 0.4, 0.8)
 # How long a write waits for another process to finish its own write.
 _LOCK_TIMEOUT_SECONDS = 10.0
 _LOCK_POLL_SECONDS = 0.05
+
+# The access log is compacted once it holds more lines than this: each
+# entity keeps its most recent opens, and the log keeps its newest half.
+# Old opens barely move the ranking, so little is lost.
+ACCESS_COMPACT_AT = 5000
+ACCESS_KEEP_PER_NAME = 50
 
 if sys.platform == "win32":
     import msvcrt
@@ -77,6 +86,22 @@ def look_repo_root(start: Path) -> Path | None:
     for folder in (start, *start.parents):
         if (folder / ".git").exists():
             return folder
+    return None
+
+
+def look_memory_root(start: Path, marker_names: tuple[str, ...]) -> Path | None:
+    """Return the folder whose memory files the server serves, or None.
+
+    - The nearest git repo root at or above `start` wins.
+    - Outside git, `start` itself counts only when it directly holds a file
+      named in `marker_names`, so a client started in a home or system
+      folder never walks that whole tree.
+    """
+    repo_root = look_repo_root(start)
+    if repo_root is not None:
+        return repo_root
+    if any((start / name).is_file() for name in marker_names):
+        return start
     return None
 
 
@@ -147,6 +172,41 @@ def _append_with_retry(path: Path, text: str) -> None:
         file.write(payload)
 
 
+def _replace_with_retry(source: Path, target: Path) -> None:
+    for delay in _LOCK_RETRY_DELAYS:
+        try:
+            source.replace(target)
+        except PermissionError:
+            time.sleep(delay)
+        else:
+            return
+    source.replace(target)
+
+
+def write_atomic(path: Path, data: bytes) -> None:
+    """Replace the file at `path` with `data` in one step.
+
+    - Writes a temporary file beside it, then renames it over the old one,
+      so a crash leaves the old file or the new one, never part of either.
+    - Keeps the old file's permission bits.
+    """
+    fd, temp = tempfile.mkstemp(
+        dir=path.parent, prefix=f".{path.name}.", suffix=".tmp"
+    )
+    temp_path = Path(temp)
+    try:
+        with os.fdopen(fd, "wb") as file:
+            file.write(data)
+            file.flush()
+            os.fsync(file.fileno())
+        if path.exists():
+            shutil.copymode(path, temp_path)
+        _replace_with_retry(temp_path, path)
+    except BaseException:
+        temp_path.unlink(missing_ok=True)
+        raise
+
+
 def calc_access_path(state_path: Path) -> Path:
     """Return the access log path in the state folder `state_path`."""
     return state_path / ACCESS_FILE_NAME
@@ -177,6 +237,36 @@ def read_accesses(path: Path) -> list[Access]:
         except (UnicodeDecodeError, json.JSONDecodeError, RecordError):
             continue
     return accesses
+
+
+def trim_accesses(
+    accesses: list[Access], keep_per_name: int, keep_total: int
+) -> list[Access]:
+    """Return the newest accesses: `keep_per_name` per entity, at most
+    `keep_total` in all, in their original order.
+    """
+    counts: Counter[str] = Counter()
+    kept: list[Access] = []
+    for access in reversed(accesses):
+        if len(kept) == keep_total:
+            break
+        counts[access.entity_name] += 1
+        if counts[access.entity_name] <= keep_per_name:
+            kept.append(access)
+    kept.reverse()
+    return kept
+
+
+def compact_accesses(path: Path, accesses: list[Access]) -> list[Access]:
+    """Rewrite the access log at `path` with its newest lines; return them.
+
+    - An open another process appends while this runs can be lost; the log
+      only tunes ranking, so that costs little.
+    """
+    kept = trim_accesses(accesses, ACCESS_KEEP_PER_NAME, ACCESS_COMPACT_AT // 2)
+    text = "".join(f"{_dump(to_access_record(a))}\n" for a in kept)
+    write_atomic(path, text.encode("utf-8"))
+    return kept
 
 
 def is_recall_log_on(environ: Mapping[str, str]) -> bool:

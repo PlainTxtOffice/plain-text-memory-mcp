@@ -1,4 +1,4 @@
-<!-- last_updated: 2026-11-13 -->
+<!-- last_updated: 2026-11-19 -->
 <!-- rumdl-disable MD033 MD041 -->
 <p align="center">
   <img src="https://raw.githubusercontent.com/PlainTxtOffice/plain-text-memory-mcp/main/assets/icons/plain-text-memory.svg" alt="Plain Text Memory icon: a text document with three connected memory nodes" width="96">
@@ -206,7 +206,8 @@ them with the `.gitignore` line `.agents/ptm/`.
 - `stamp.lock` serializes stamping, so Claude Code and Codex can
   stamp the same repo at the same time.
 - `access.jsonl` logs each opened entity; search uses it to
-  rank often-opened entities higher. Deleting it only resets that ranking.
+  rank often-opened entities higher. Past 5,000 lines it is trimmed to the
+  newest opens. Deleting it only resets that ranking.
 
 ## Guidance for agents
 

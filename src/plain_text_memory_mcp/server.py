@@ -162,6 +162,10 @@ _MEMORY_PATH_HINT = (
     f"Name {parser.FILE_NAME} files inside the repo, relative to its root,"
     " such as src/search/MEMORY.ptm.md."
 )
+_NO_ROOT_HINT = (
+    "Start the server in the repo's folder, or in a folder that holds a"
+    f" {parser.FILE_NAME} or AGENTS.md file, then restart the client."
+)
 _MOMENT_FORMAT_HINT = (
     "Use an ISO date such as 2026-10-01, or a timestamp such as"
     " 2026-10-01T09:00:00-04:00."
@@ -417,15 +421,26 @@ def _resolve_memory_file(repo_root: Path, raw: str) -> str:
 
 
 def _read_text(path: Path) -> str:
+    """Return a memory file's text; refuse one that is not UTF-8.
+
+    - Stamping rewrites the file, so decoding with replacement characters
+      would destroy the bytes it could not read.
+    """
     try:
         return path.read_bytes().decode("utf-8")
     except OSError as exc:
         raise _to_file_error(path, exc) from exc
+    except UnicodeDecodeError as exc:
+        message = (
+            f"{path}: not valid UTF-8 at byte {exc.start}. Save the file as"
+            " UTF-8, then retry."
+        )
+        raise ToolError(message) from exc
 
 
 def _write_text(path: Path, text: str) -> None:
     try:
-        path.write_bytes(text.encode("utf-8"))
+        storage.write_atomic(path, text.encode("utf-8"))
     except OSError as exc:
         raise _to_file_error(path, exc) from exc
 
@@ -433,7 +448,7 @@ def _write_text(path: Path, text: str) -> None:
 def build_server(
     state_path: Path,
     agent_override: str | None,
-    repo_root: Path,
+    repo_root: Path | None,
     *,
     recall_log: bool = False,
 ) -> MCPServer:
@@ -447,6 +462,8 @@ def build_server(
     - A thread lock serializes tool calls within this process, and a file
       lock serializes stamping across processes, such as Claude Code and
       Codex sharing one repo. Every call re-reads changed files.
+    - With `repo_root` None, from a folder with no repo or memory file,
+      every tool fails with a hint and writes nothing.
     - `recall_log` comes from `MEMORY_RECALL_LOG` and appends every recall
       step, search, and open to the recall log.
     """
@@ -481,6 +498,12 @@ def build_server(
         )
         return app.tool(title=title, annotations=annotations)
 
+    def need_root() -> Path:
+        if repo_root is None:
+            message = f"No git repo or memory file found. {_NO_ROOT_HINT}"
+            raise ToolError(message)
+        return repo_root
+
     def calc_caller_name(ctx: Context) -> str:
         params = ctx.session.client_params
         client_name = params.client_info.name if params else None
@@ -500,9 +523,9 @@ def build_server(
     def build_memory() -> graph.Graph:
         """Return the index of every memory file; call under `lock`."""
         try:
-            return index.build_index(repo_root, cache)
+            return index.build_index(need_root(), cache)
         except OSError as exc:
-            raise _to_file_error(repo_root, exc) from exc
+            raise _to_file_error(need_root(), exc) from exc
 
     def read_memory(include_superseded: bool = True) -> graph.Graph:
         with lock:
@@ -512,10 +535,17 @@ def build_server(
     access_path = storage.calc_access_path(state_path)
 
     def read_accesses() -> list[graph.Access]:
+        """Read the access log, compacting it when it has grown long."""
         try:
-            return storage.read_accesses(access_path)
+            accesses = storage.read_accesses(access_path)
         except OSError:
             return []
+        if len(accesses) > storage.ACCESS_COMPACT_AT:
+            try:
+                accesses = storage.compact_accesses(access_path, accesses)
+            except OSError:
+                pass
+        return accesses
 
     def log_accesses(names: list[str]) -> None:
         """Record opened entities; a failure never fails the read."""
@@ -543,8 +573,9 @@ def build_server(
         relative: str, caller: str, now: datetime
     ) -> tuple[StampedFileRecord, list[parser.Bullet]]:
         """Stamp one memory file and archive its old retired notes."""
-        path = repo_root / relative
-        name = index.calc_default_name(repo_root, relative)
+        root = need_root()
+        path = root / relative
+        name = index.calc_default_name(root, relative)
         text = _read_text(path)
         stamped = stamping.update_stamps(text, name, caller, now)
         archive_path = path.with_name(parser.ARCHIVE_FILE_NAME)
@@ -591,8 +622,9 @@ def build_server(
         secrets, facts that give no reason, and [[links]] to entities no
         memory file names; and about files over 200 lines.
         """
+        root = need_root()
         relatives = list(
-            dict.fromkeys(_resolve_memory_file(repo_root, p) for p in paths)
+            dict.fromkeys(_resolve_memory_file(root, p) for p in paths)
         )
         caller = calc_caller_name(ctx)
         now = _now()
@@ -609,9 +641,9 @@ def build_server(
             warnings = _screen(graph.filter_current(memory), stamped)
             warnings += reasonless
             for relative in relatives:
-                memory_file = index.read_memory_file(repo_root, relative, cache)
+                memory_file = index.read_memory_file(root, relative, cache)
                 warnings += _look_broken_links(memory, memory_file, relative)
-                text = _read_text(repo_root / relative)
+                text = _read_text(root / relative)
                 warnings += _look_long_file(memory_file, text, relative)
         return {"files": files, "warnings": warnings}
 
@@ -848,7 +880,7 @@ def build_server(
             state,
             accesses=read_accesses(),
             now=_now(),
-            scope=_normalize_scope(repo_root, path),
+            scope=_normalize_scope(need_root(), path),
         )
         with state.lock:
             state.steps.add(step)
@@ -916,10 +948,14 @@ def build_server(
 
 
 def main() -> None:
-    """Start the memory server on stdio for the current working directory."""
+    """Start the memory server on stdio for the current working directory.
+
+    - With no memory root found, the server still starts, so the client
+      shows each tool's error and its fix instead of a failed launch.
+    """
     cwd = Path.cwd()
-    repo_root = storage.look_repo_root(cwd) or cwd
-    state_path = storage.calc_state_path(repo_root)
+    repo_root = storage.look_memory_root(cwd, index.SOURCE_NAMES)
+    state_path = storage.calc_state_path(repo_root or cwd)
     agent_override = os.environ.get("MEMORY_AGENT")
     recall_log = storage.is_recall_log_on(os.environ)
     build_server(

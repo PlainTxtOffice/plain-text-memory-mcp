@@ -146,3 +146,16 @@ def test_archive_retired_without_due_notes_changes_nothing() -> None:
         "",
         (),
     )
+
+
+def test_archive_retired_does_not_repeat_archived_lines() -> None:
+    first = stamping.archive_retired(SUPERSEDED, "", "x", NOW)
+    # As if the archive was written but the memory file was not.
+    again = stamping.archive_retired(SUPERSEDED, first.archive_text, "x", NOW)
+    assert again.archive_text == first.archive_text
+    assert again.text == first.text
+
+
+def test_update_stamps_keeps_a_byte_order_mark() -> None:
+    result = stamping.update_stamps("\ufeff- Uses SQLite.\n", "x", "codex", NOW)
+    assert result.text.startswith("\ufeff- Uses SQLite. <!-- ")

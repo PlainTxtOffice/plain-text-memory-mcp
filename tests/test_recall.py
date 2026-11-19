@@ -687,3 +687,13 @@ def test_recall_path_ranks_notes_from_covering_files_first(
 
     assert by_rank(plain) == ["cache", "store"]
     assert by_rank(scoped) == ["store", "cache"]
+
+
+def test_registry_forgets_the_least_recently_used_session() -> None:
+    registry = SessionRegistry(limit=2)
+    first = registry.init()
+    second = registry.init()
+    assert registry.look(first.session_id) is first
+    registry.init()
+    assert registry.look(second.session_id) is None
+    assert registry.look(first.session_id) is first

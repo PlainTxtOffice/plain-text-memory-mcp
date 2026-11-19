@@ -107,3 +107,43 @@ def test_load_schema_reads_package_taxonomy() -> None:
     root = Path(__file__).resolve().parents[1]
     path = root / "src" / "plain_text_memory_mcp" / "taxonomy.json"
     assert storage.load_schema() == json.loads(path.read_text(encoding="utf-8"))
+
+
+def test_look_memory_root_prefers_the_git_root(tmp_path: Path) -> None:
+    (tmp_path / ".git").mkdir()
+    nested = tmp_path / "src"
+    nested.mkdir()
+    assert storage.look_memory_root(nested, ("AGENTS.md",)) == tmp_path
+
+
+def test_look_memory_root_outside_git_needs_a_marker(tmp_path: Path) -> None:
+    assert storage.look_memory_root(tmp_path, ("AGENTS.md",)) is None
+    (tmp_path / "AGENTS.md").write_bytes(b"# notes\n")
+    assert storage.look_memory_root(tmp_path, ("AGENTS.md",)) == tmp_path
+
+
+def test_write_atomic_replaces_and_leaves_no_temp(tmp_path: Path) -> None:
+    target = tmp_path / "MEMORY.ptm.md"
+    target.write_bytes(b"old\n")
+    storage.write_atomic(target, b"new\n")
+    assert target.read_bytes() == b"new\n"
+    assert [p.name for p in tmp_path.iterdir()] == ["MEMORY.ptm.md"]
+
+
+def test_trim_accesses_keeps_newest_per_name_and_in_all() -> None:
+    accesses = [Access(f"t{i}", "a" if i % 2 else "b") for i in range(10)]
+    kept = storage.trim_accesses(accesses, keep_per_name=2, keep_total=3)
+    assert kept == [Access("t7", "a"), Access("t8", "b"), Access("t9", "a")]
+
+
+def test_compact_accesses_rewrites_the_log(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(storage, "ACCESS_COMPACT_AT", 4)
+    monkeypatch.setattr(storage, "ACCESS_KEEP_PER_NAME", 1)
+    path = tmp_path / "access.jsonl"
+    accesses = [Access(f"2026-10-0{i}T00:00:00", f"e{i % 3}") for i in range(6)]
+    storage.append_accesses(path, accesses)
+    kept = storage.compact_accesses(path, storage.read_accesses(path))
+    assert kept == accesses[-2:]
+    assert storage.read_accesses(path) == kept

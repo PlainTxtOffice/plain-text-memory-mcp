@@ -121,3 +121,11 @@ def test_long_verb_phrase_with_link_stays_a_note() -> None:
 def test_multi_word_verb_becomes_snake_case_relation() -> None:
     memory = parser.parse_file("- depends on [[sqlite]]\n", "x")
     assert memory.bullets[0].relation == ("depends_on", "sqlite")
+
+
+def test_parse_file_ignores_a_byte_order_mark() -> None:
+    memory_file = parser.parse_file("\ufeff# notes\n\n## db\n- A fact.\n", "x")
+    assert memory_file.folder_entity == "notes"
+    assert memory_file.summary == ""
+    agents = parser.parse_agents_file("\ufeff## Setup\n- Use uv.\n", "x")
+    assert agents.entities == ("x", "Setup")
