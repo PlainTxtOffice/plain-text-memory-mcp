@@ -272,10 +272,10 @@ and never read back.
 
 ## Feedback
 
-Report a bug or request a feature in
-[GitHub Issues](https://github.com/PlainTxtOffice/plain-text-memory-mcp/issues),
-or use the
-[contact form](https://plaintxtoffice.com/contact/).
+Send bug reports and feature requests to
+[support@plaintxtoffice.com](mailto:support@plaintxtoffice.com), through the
+[contact page](https://plaintxtoffice.com/contact/), or in
+[GitHub Issues](https://github.com/PlainTxtOffice/plain-text-memory-mcp/issues).
 
 ## User Manual
 
