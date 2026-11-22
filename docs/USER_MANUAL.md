@@ -1,6 +1,6 @@
 ---
-last_updated: 2026-11-19
-version: 1.2.0
+last_updated: 2026-11-22
+version: 1.3.0
 product_version: "0.4.1"
 generated_from: "dev-docs/specs/USER_MANUAL_SPEC.instructions.md"
 ---
@@ -786,11 +786,7 @@ It follows no special format:
 | A retired fact is gone from its file. | It was retired 90 days or more ago and moved on the next stamp. | Open `MEMORY.ptm.archive.md` in the same folder. |
 <!-- Verified from: src/plain_text_memory_mcp/server.py [_FILE_ACCESS_HINT, _LOCK_TIMEOUT_HINT, _MEMORY_PATH_HINT, _MOMENT_FORMAT_HINT, _resolve_memory_file, recall, main]; src/plain_text_memory_mcp/storage.py [lock_memory, look_repo_root]; src/plain_text_memory_mcp/ptm/parser.py [parse_file, _parse_relation]; src/plain_text_memory_mcp/agent.py; src/plain_text_memory_mcp/ptm/stamping.py; https://docs.astral.sh/uv/concepts/tools/; https://docs.astral.sh/uv/reference/cli/#uv-tool-install; https://code.claude.com/docs/en/mcp; https://learn.chatgpt.com/docs/extend/mcp?surface=cli; https://cursor.com/docs/context/mcp; https://code.visualstudio.com/docs/agents/run/manage-mcp-servers; https://code.visualstudio.com/docs/copilot/reference/mcp-configuration -->
 
-Send bug reports that are not listed here, and feature requests, to
-[support@plaintxtoffice.com](mailto:support@plaintxtoffice.com), through the
-[contact page](https://plaintxtoffice.com/contact/), or in
-[GitHub Issues](https://github.com/PlainTxtOffice/plain-text-memory-mcp/issues).
-<!-- Verified from: pyproject.toml [project.urls, project.maintainers]; https://plaintxtoffice.com/contact/ -->
+To report a problem that is not listed here, see [Feedback](#feedback).
 
 ## FAQ
 
@@ -833,6 +829,16 @@ Yes; it is your file. Striking it through keeps its history, which is why
 agents are told to strike rather than delete, and to ask you before they
 add, reword, strike, or delete any fact.
 <!-- Verified from: src/plain_text_memory_mcp/server.py [INSTRUCTIONS] -->
+
+## Feedback
+
+Send bug reports and feature requests to
+[support@plaintxtoffice.com](mailto:support@plaintxtoffice.com), through the
+[contact page](https://plaintxtoffice.com/contact/), or in
+[GitHub Issues](https://github.com/PlainTxtOffice/plain-text-memory-mcp/issues).
+Include the server version, your MCP client, and the steps that led to the
+problem. The server has no feedback tool of its own.
+<!-- Verified from: pyproject.toml [project.urls, project.maintainers]; src/plain_text_memory_mcp/server.py [build_server]; https://plaintxtoffice.com/contact/; GitHub repository PlainTxtOffice/plain-text-memory-mcp [issues enabled] -->
 
 ## Glossary
 
