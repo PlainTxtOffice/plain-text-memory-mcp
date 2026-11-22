@@ -1,7 +1,7 @@
-<!-- last_updated: 2026-11-19 -->
+<!-- last_updated: 2026-11-22 -->
 <!-- rumdl-disable MD033 MD041 -->
 <p align="center">
-  <img src="https://raw.githubusercontent.com/PlainTxtOffice/plain-text-memory-mcp/main/assets/icons/plain-text-memory.svg" alt="Plain Text Memory icon: a text document with three connected memory nodes" width="96">
+  <img src="https://raw.githubusercontent.com/PlainTxtOffice/plain-text-memory-mcp/main/assets/icons/icon-github-readme.svg" alt="Plain Text Memory icon: a text document with three connected memory nodes" width="96">
 </p>
 
 <h1 align="center">plain-text-memory-mcp</h1>
